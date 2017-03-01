@@ -54,6 +54,8 @@
   <ItemGroup>
     <Compile Include="BloodHoundIngestor.cs" />
     <Compile Include="DomainGroupEnumeration.cs" />
+    <Compile Include="Exceptions\APIFailedException.cs" />
+    <Compile Include="Exceptions\SystemDownException.cs" />
     <Compile Include="Objects\DomainTrust.cs" />
     <Compile Include="DomainTrustMapping.cs" />
     <Compile Include="Helpers.cs" />
@@ -71,9 +73,7 @@
     <None Include="PowerView.ps1" />
     <None Include="PowerView1.ps1" />
   </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Exceptions\" />
-  </ItemGroup>
+  <ItemGroup />
   <ItemGroup>
     <Content Include="FodyWeavers.xml" />
   </ItemGroup>

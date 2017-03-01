@@ -17,23 +17,6 @@ namespace BloodHoundIngestor
         private Dictionary<String, Domain> DomainResolveCache;
         private List<String> DomainList;
         private Options options;
-        private Type TranslateName;
-        object TranslateInstance;
-
-        public enum  ADSTypes{
-            ADS_NAME_TYPE_DN = 1,
-            ADS_NAME_TYPE_CANONICAL = 2,
-            ADS_NAME_TYPE_NT4 = 3,
-            ADS_NAME_TYPE_DISPLAY = 4,
-            ADS_NAME_TYPE_DOMAIN_SIMPLE = 5,
-            ADS_NAME_TYPE_ENTERPRISE_SIMPLE = 6,
-            ADS_NAME_TYPE_GUID = 7,
-            ADS_NAME_TYPE_UNKNOWN = 8,
-            ADS_NAME_TYPE_USER_PRINCIPAL_NAME = 9,
-            ADS_NAME_TYPE_CANONICAL_EX = 10,
-            ADS_NAME_TYPE_SERVICE_PRINCIPAL_NAME = 11,
-            ADS_NAME_TYPE_SID_OR_SID_HISTORY_NAME = 12
-        }
 
         public static void CreateInstance(Options cli)
         {
@@ -53,13 +36,6 @@ namespace BloodHoundIngestor
             DomainResolveCache = new Dictionary<string, Domain>();
             DomainList = null;
             options = cli;
-            TranslateName = Type.GetTypeFromProgID("NameTranslate");
-            TranslateInstance = Activator.CreateInstance(TranslateName);
-
-            object[] args = new object[2];
-            args[0] = 3;
-            args[1] = "";
-            TranslateName.InvokeMember("Init", BindingFlags.InvokeMethod, null, TranslateInstance, args);
         }
 
         public bool IsWritingCSV()
@@ -84,12 +60,13 @@ namespace BloodHoundIngestor
             if (SearchBase != null)
             {
                 SearchString += SearchBase;
-            }else
+            }
+            else
             {
                 string DomainDN = DomainName.Replace(".", ",DC=");
                 SearchString += "DC=" + DomainDN;
             }
-            
+
             options.WriteVerbose(String.Format("[GetDomainSearcher] Search String: {0}", SearchString));
 
             DirectorySearcher Searcher = new DirectorySearcher(new DirectoryEntry(SearchString));
@@ -109,13 +86,14 @@ namespace BloodHoundIngestor
             }
             Forest f = null;
             List<String> domains = new List<String>();
-            
+
             if (Forest == null)
             {
                 f = System.DirectoryServices.ActiveDirectory.Forest.GetCurrentForest();
-            }else
+            }
+            else
             {
-                DirectoryContext context = new DirectoryContext(DirectoryContextType.Forest,Forest);
+                DirectoryContext context = new DirectoryContext(DirectoryContextType.Forest, Forest);
                 try
                 {
                     f = System.DirectoryServices.ActiveDirectory.Forest.GetForest(context);
@@ -135,7 +113,7 @@ namespace BloodHoundIngestor
             DomainList = domains;
 
             return domains;
-            
+
         }
 
         public Domain GetDomain(string Domain = null)
@@ -172,12 +150,13 @@ namespace BloodHoundIngestor
                     Console.WriteLine(e);
                     DomainObject = null;
                 }
-                
+
             }
             if (Domain == null)
             {
                 DomainResolveCache["UNIQUENULLOBJECT"] = DomainObject;
-            }else
+            }
+            else
             {
                 DomainResolveCache[Domain] = DomainObject;
             }
@@ -188,7 +167,8 @@ namespace BloodHoundIngestor
         {
             string TrimmedCN = cn.Trim('*');
             string result;
-            switch(TrimmedCN) {
+            switch (TrimmedCN)
+            {
                 case "S-1-0":
                     result = "Null Authority";
                     break;
@@ -383,8 +363,8 @@ namespace BloodHoundIngestor
                         options.WriteVerbose("Invalid SID " + cn);
                         result = null;
                     }
-                    
-                    break;   
+
+                    break;
             }
             return result;
         }
@@ -401,52 +381,6 @@ namespace BloodHoundIngestor
                     var sid = new SecurityIdentifier(domainSid, 0);
                     return sid.ToString();
                 }
-            }
-        }
-
-        public string ConvertADName(string ObjectName, ADSTypes InputType, ADSTypes OutputType)
-        {
-            string Domain;
-            if (InputType.Equals(ADSTypes.ADS_NAME_TYPE_NT4))
-            {
-                ObjectName = ObjectName.Replace("/", "\\");
-            }
-
-            switch (InputType)
-            {
-                case ADSTypes.ADS_NAME_TYPE_NT4:
-                    Domain = ObjectName.Split('\\')[0];
-                    break;
-                case ADSTypes.ADS_NAME_TYPE_DOMAIN_SIMPLE:
-                    Domain = ObjectName.Split('@')[1];
-                    break;
-                case ADSTypes.ADS_NAME_TYPE_CANONICAL:
-                    Domain = ObjectName.Split('/')[0];
-                    break;
-                case ADSTypes.ADS_NAME_TYPE_DN:
-                    Domain = ObjectName.Substring(ObjectName.IndexOf("DC=")).Replace("DC=", "").Replace(",", ".");
-                    break;
-            }
-
-            //PropertyInfo Referral = TranslateName.GetProperty("ChaseReferrals");
-            //Referral.SetValue(obj, 0x60, null);
-            
-            try
-            {
-                object[] args = new object[2];
-                args[0] = (int)InputType;
-                args[1] = ObjectName;
-                TranslateName.InvokeMember("Set", BindingFlags.InvokeMethod, null, TranslateInstance, args);
-
-                args = new object[1];
-                args[0] = (int)OutputType;
-
-                string Result = (string)TranslateName.InvokeMember("Get", BindingFlags.InvokeMethod, null, TranslateInstance, args);
-                return Result;
-            }
-            catch
-            {
-                return null;
             }
         }
     }

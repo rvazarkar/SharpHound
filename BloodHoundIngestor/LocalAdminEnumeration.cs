@@ -1,5 +1,8 @@
-﻿using System;
+﻿using BloodHoundIngestor.Exceptions;
+using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.DirectoryServices;
 using System.IO;
 using System.Linq;
@@ -37,134 +40,150 @@ namespace BloodHoundIngestor
                 Domains.Add(Helpers.GetDomain().Name);
             }
 
-            EnumerationQueue<LocalAdminInfo> outQueue = new EnumerationQueue<LocalAdminInfo>();
-            Writer w = new Writer();
-            Thread write = new Thread(unused => w.Write(outQueue, options));
+            Writer w = new Writer(options);
+            Thread write = new Thread(unused => w.Write());
             write.Start();
 
+            Stopwatch watch = Stopwatch.StartNew();
             foreach (String DomainName in Domains)
             {
-                int count = 0;
-                string DomainSID = Helpers.GetDomainSid(DomainName);
-                EnumerationQueue<string> inQueue = new EnumerationQueue<string>();
+                EnumerationData.Reset();
+                EnumerationData.DomainSID = Helpers.GetDomainSid(DomainName);
+
+                ManualResetEvent[] doneEvents = new ManualResetEvent[options.Threads];
+
+                for (int i = 0; i < options.Threads; i++)
+                {
+                    doneEvents[i] = new ManualResetEvent(false);
+                    Enumerator e = new Enumerator(doneEvents[i], options);
+                    Thread consumer = new Thread(unused => e.ThreadCallback());
+                    consumer.Start();
+                }
+
+                int lTotal = 0;
 
                 DirectorySearcher searcher = Helpers.GetDomainSearcher(DomainName);
                 searcher.Filter = "(sAMAccountType=805306369)";
                 searcher.PropertiesToLoad.Add("dnshostname");
                 foreach (SearchResult x in searcher.FindAll())
                 {
-                    var y = x.Properties["dnshostname"];
-                    if (y.Count > 0)
-                    {
-                        inQueue.add(y[0].ToString());
-                        count++;
-                    }
+                    EnumerationData.SearchResults.Enqueue(x);
+                    lTotal += 1;
                 }
-                options.WriteVerbose(String.Format("Enumerating {0} machines in domain {1}",count,DomainName));
                 searcher.Dispose();
 
-                for (int i = 0; i < options.Threads; i++)
-                {
-                    inQueue.add(null);
-                }
+                EnumerationData.total = lTotal;
+                EnumerationData.SearchResults.Enqueue(null);
 
-                List<Thread> threads = new List<Thread>();
-
-                for (int i = 0; i < options.Threads; i++)
-                {
-                    Enumerator e = new Enumerator();
-                    Thread consumer = new Thread(unused => e.ConsumeAndEnumerate(inQueue, outQueue, DomainSID));
-                    consumer.Start();
-                    threads.Add(consumer);
-                }
-                
-                foreach (var t in threads)
-                {
-                    t.Join();
-                }
+                WaitHandle.WaitAll(doneEvents);
+                Console.WriteLine(String.Format("Done group enumeration for domain {0} with {1} succesful hosts out of {2} queried", DomainName, EnumerationData.live, EnumerationData.done));
             }
-            outQueue.add(null);
+            EnumerationData.EnumResults.Enqueue(null);
             write.Join();
         }
 
-        public class Writer
+        public class EnumerationData
         {
-            public void Write(Object outq, Object cli)
-            {
-                int count = 0;
-                EnumerationQueue<LocalAdminInfo> outQueue = (EnumerationQueue<LocalAdminInfo>)outq;
-                Options o = (Options)cli;
+            public static string DomainSID { get; set; }
+            public static ConcurrentQueue<SearchResult> SearchResults;
+            public static ConcurrentQueue<LocalAdminInfo> EnumResults = new ConcurrentQueue<LocalAdminInfo>();
+            public static int live = 0;
+            public static int done = 0;
+            public static int total = 0;
 
-                if (o.URI == null)
-                {
-                    using (StreamWriter writer = new StreamWriter(o.GetFilePath("local_admins.csv")))
-                    {
-                        writer.WriteLine("ComputerName,AccountName,AccountType");
-                        while (true)
-                        {
-                            try
-                            {
-                                LocalAdminInfo info = outQueue.get();
-                                if (info == null)
-                                {
-                                    writer.Flush();
-                                    break;
-                                }
-                                writer.WriteLine(info.ToCSV());
-                                
-                                count++;
-                                if (count % 1000 == 0)
-                                {
-                                    Console.WriteLine("Local Admins Enumerated " + count);
-                                    writer.Flush();
-                                }
-                            }
-                            catch
-                            {                                
-                                continue;
-                            }
-                        }
-                    }
-                }
-                
+            public static void Reset()
+            {
+                SearchResults = new ConcurrentQueue<SearchResult>();
+                live = 0;
+                done = 0;
+                total = 0;
             }
         }
 
-
         public class Enumerator
         {
-            public void ConsumeAndEnumerate(Object inq, Object outq, Object dsid)
-            {
-                EnumerationQueue<String> inQueue = (EnumerationQueue<String>) inq;
-                EnumerationQueue<LocalAdminInfo> outQueue = (EnumerationQueue<LocalAdminInfo>)outq;
-                string DomainSID = (string)dsid;
+            private ManualResetEvent _doneEvent;
+            private Options _options;
+            private Helpers _helpers;
 
+            public Enumerator(ManualResetEvent doneEvent, Options options)
+            {
+                _doneEvent = doneEvent;
+                _options = options;
+                _helpers = Helpers.Instance;
+            }
+
+            public void ThreadCallback()
+            {
                 while (true)
+                {
+                    SearchResult result;
+                    if (EnumerationData.SearchResults.TryDequeue(out result))
+                    {
+                        if (result == null)
+                        {
+                            EnumerationData.SearchResults.Enqueue(result);
+                            break;
+                        }
+                        try
+                        {
+                            EnumerateSystem(result);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine(ex);
+                        }
+
+                    }
+                }
+                _doneEvent.Set();
+            }
+
+            public void EnumerateSystem(SearchResult result)
+            {
+                var y = result.Properties["dnshostname"];
+                string hostname;
+                if (y.Count > 0)
+                {
+                    hostname = y[0].ToString();
+                    Console.WriteLine(hostname);
+                }else
+                {
+                    return;
+                }
+
+                List<LocalAdminInfo> results = new List<LocalAdminInfo>();
+
+                try
+                {
+                    results = LocalGroupAPI(hostname, "Administrators", EnumerationData.DomainSID);
+                }catch (SystemDownException)
+                {
+                    Interlocked.Increment(ref EnumerationData.done);
+                    return;
+                }catch (APIFailedException)
                 {
                     try
                     {
-                        String host = inQueue.get();
-                        if (host == null)
-                        {
-                            break;
-                        }
-
-                        List<LocalAdminInfo> results = LocalGroupAPI(host, "Administrators",DomainSID);
-                        if (results.Count == 0)
-                        {
-                            results = LocalGroupWinNT(host, "Administrators");
-                        }
-
-                        foreach (LocalAdminInfo s in results)
-                        {
-                            outQueue.add(s);
-                        }
+                        results = LocalGroupWinNT(hostname, "Administrators");
                     }
-                    catch (Exception e)
+                    catch
                     {
-                        Console.WriteLine(e);
-                        continue;
+                        Interlocked.Increment(ref EnumerationData.done);
+                        return;
                     }
+                }
+                Interlocked.Increment(ref EnumerationData.live);
+                Interlocked.Increment(ref EnumerationData.done);
+
+                if (EnumerationData.done % 100 == 0)
+                {
+                    string tot = EnumerationData.total == 0 ? "unknown" : EnumerationData.total.ToString();
+                    _options.WriteVerbose(string.Format("Systemes Enumerated: {0} out of {1}", EnumerationData.done, tot));
+                }
+                foreach (LocalAdminInfo r in results)
+                {
+                    EnumerationData.EnumResults.Enqueue(r);
                 }
             }
 
@@ -214,6 +233,16 @@ namespace BloodHoundIngestor
                 List<LocalAdminInfo> users = new List<LocalAdminInfo>();
 
                 int val = NetLocalGroupGetMembers(Target, Group, QueryLevel, out PtrInfo, -1, out EntriesRead, out TotalRead, ResumeHandle);
+                if (val == 1722)
+                {
+                    throw new SystemDownException();
+                }
+
+                if (val != 0)
+                {
+                    throw new APIFailedException();
+                }
+
                 if (EntriesRead > 0)
                 {
                     LOCALGROUP_MEMBERS_INFO_2[] Members = new LOCALGROUP_MEMBERS_INFO_2[EntriesRead];
@@ -286,6 +315,61 @@ namespace BloodHoundIngestor
             [DllImport("kernel32.dll", SetLastError = true)]
             static extern IntPtr LocalFree(IntPtr hMem);
             #endregion
+        }
+
+        public class Writer
+        {
+            private Options _cli;
+            private int _localCount;
+
+            public Writer(Options cli)
+            {
+                _cli = cli;
+                _localCount = 0;
+            }
+
+            public void Write()
+            {
+                if (_cli.URI == null)
+                {
+                    using (StreamWriter writer = new StreamWriter(_cli.GetFilePath("local_admins.csv")))
+                    {
+                        writer.WriteLine("GroupName,AccountName,AccountType");
+                        while (true)
+                        {
+                            while (EnumerationData.EnumResults.IsEmpty)
+                            {
+                                Thread.Sleep(100);
+                            }
+
+                            try
+                            {
+                                LocalAdminInfo info;
+
+                                if (EnumerationData.EnumResults.TryDequeue(out info))
+                                {
+                                    if (info == null)
+                                    {
+                                        writer.Flush();
+                                        break;
+                                    }
+                                    writer.WriteLine(info.ToCSV());
+
+                                    _localCount++;
+                                    if (_localCount % 1000 == 0)
+                                    {
+                                        writer.Flush();
+                                    }
+                                }
+                            }
+                            catch
+                            {
+                                continue;
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

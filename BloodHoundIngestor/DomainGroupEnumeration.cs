@@ -7,6 +7,7 @@ using System.DirectoryServices;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -56,15 +57,7 @@ namespace BloodHoundIngestor
                 EnumerationData.DomainName = DomainName;
                 EnumerationData.DomainSID = DomainSid;
 
-                DirectorySearcher DomainSearcher = Helpers.GetDomainSearcher(DomainName);
-                DomainSearcher.Filter = "(memberof=*)";
-                
-                DomainSearcher.PropertiesToLoad.AddRange(props);
-
-                ManualResetEvent[] doneEvents = new ManualResetEvent[options.Threads];
-
-                SearchResultCollection coll = DomainSearcher.FindAll();
-                
+                ManualResetEvent[] doneEvents = new ManualResetEvent[options.Threads];                
 
                 for (int i = 0; i < options.Threads; i++)
                 {
@@ -76,7 +69,12 @@ namespace BloodHoundIngestor
 
                 int lTotal = 0;
 
-                foreach (SearchResult r in coll)
+                DirectorySearcher DomainSearcher = Helpers.GetDomainSearcher(DomainName);
+                DomainSearcher.Filter = "(memberof=*)";
+
+                DomainSearcher.PropertiesToLoad.AddRange(props);
+
+                foreach (SearchResult r in DomainSearcher.FindAll())
                 {
                     lTotal += 1;
                     EnumerationData.SearchResults.Enqueue(r);
@@ -99,6 +97,27 @@ namespace BloodHoundIngestor
         }
     }
 
+    public class EnumerationData
+    {
+        public static string DomainName { get; set; }
+        public static string DomainSID { get; set; }
+        public static ConcurrentDictionary<string, string> GroupDNMappings;
+        public static ConcurrentDictionary<string, string> PrimaryGroups;
+        public static ConcurrentQueue<SearchResult> SearchResults;
+        public static ConcurrentQueue<GroupMembershipInfo> EnumResults = new ConcurrentQueue<GroupMembershipInfo>();
+        public static int count = 0;
+        public static int total = 0;
+
+        public static void Reset()
+        {
+            GroupDNMappings = new ConcurrentDictionary<string, string>();
+            PrimaryGroups = new ConcurrentDictionary<string, string>();
+            SearchResults = new ConcurrentQueue<SearchResult>();
+            count = 0;
+            total = 0;
+        }
+    }
+
     public class Enumerator
     {
         private ManualResetEvent _doneEvent;
@@ -115,10 +134,10 @@ namespace BloodHoundIngestor
 
             TranslateName = Type.GetTypeFromProgID("NameTranslate");
             TranslateInstance = Activator.CreateInstance(TranslateName);
-
+            
             object[] args = new object[2];
-            args[0] = 3;
-            args[1] = "";
+            args[0] = 1;
+            args[1] = EnumerationData.DomainName;
             TranslateName.InvokeMember("Init", BindingFlags.InvokeMethod, null, TranslateInstance, args);
         }
 
@@ -144,6 +163,7 @@ namespace BloodHoundIngestor
                     
                 }
             }
+            Marshal.ReleaseComObject(TranslateInstance);
             _doneEvent.Set();
         }
 
@@ -392,28 +412,6 @@ namespace BloodHoundIngestor
                 string tot = EnumerationData.total == 0 ? "unknown" : EnumerationData.total.ToString();
                 _options.WriteVerbose(string.Format("Objects Enumerated: {0} out of {1}", EnumerationData.count, tot));
             }
-        }
-    }
-
-    public class EnumerationData
-    {
-        public static string DomainName { get; set; }
-        public static string DomainSID { get; set; }
-        public static ConcurrentDictionary<string, string> GroupDNMappings;
-        public static ConcurrentDictionary<string, string> PrimaryGroups;
-        public static ConcurrentQueue<SearchResult> SearchResults;
-        public static ConcurrentQueue<GroupMembershipInfo> EnumResults = new ConcurrentQueue<GroupMembershipInfo>();
-        public static int count = 0;
-        public static int total = 0;
-        public static readonly Object POISON_PILL = new Object();
-
-        public static void Reset()
-        {
-            GroupDNMappings = new ConcurrentDictionary<string, string>();
-            PrimaryGroups = new ConcurrentDictionary<string, string>();
-            SearchResults = new ConcurrentQueue<SearchResult>();
-            count = 0;
-            total = 0;
         }
     }
 

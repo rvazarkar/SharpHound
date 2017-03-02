@@ -63,9 +63,11 @@
     <Compile Include="Objects\GroupEnumObject.cs" />
     <Compile Include="Objects\GroupMembershipInfo.cs" />
     <Compile Include="Objects\LocalAdminInfo.cs" />
+    <Compile Include="Objects\SessionInfo.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Queue.cs" />
     <Compile Include="SessionEnumeration.cs" />
+    <Compile Include="WriterBase.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="BloodHound.ps1" />

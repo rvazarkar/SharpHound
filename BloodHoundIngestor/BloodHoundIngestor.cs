@@ -104,23 +104,23 @@ namespace BloodHoundIngestor
 
                 if (options.CollMethod.Equals(Options.CollectionMethod.Default))
                 {
-                    DomainTrustMapping TrustMapper = new DomainTrustMapping(options);
+                    DomainTrustMapping TrustMapper = new DomainTrustMapping();
                     TrustMapper.GetDomainTrusts();
-                    DomainGroupEnumeration GroupEnumeration = new DomainGroupEnumeration(options);
+                    DomainGroupEnumeration GroupEnumeration = new DomainGroupEnumeration();
                     GroupEnumeration.EnumerateGroupMembership();
-                    LocalAdminEnumeration AdminEnumeration = new LocalAdminEnumeration(options);
+                    LocalAdminEnumeration AdminEnumeration = new LocalAdminEnumeration();
                     AdminEnumeration.EnumerateLocalAdmins();
                 }else if (options.CollMethod.Equals(Options.CollectionMethod.Trusts))
                 {
-                    DomainTrustMapping TrustMapper = new DomainTrustMapping(options);
+                    DomainTrustMapping TrustMapper = new DomainTrustMapping();
                     TrustMapper.GetDomainTrusts();
                 }else if (options.CollMethod.Equals(Options.CollectionMethod.LocalGroup))
                 {
-                    LocalAdminEnumeration AdminEnumeration = new LocalAdminEnumeration(options);
+                    LocalAdminEnumeration AdminEnumeration = new LocalAdminEnumeration();
                     AdminEnumeration.EnumerateLocalAdmins();
                 }else if (options.CollMethod.Equals(Options.CollectionMethod.Group))
                 {
-                    DomainGroupEnumeration GroupEnumeration = new DomainGroupEnumeration(options);
+                    DomainGroupEnumeration GroupEnumeration = new DomainGroupEnumeration();
                     GroupEnumeration.EnumerateGroupMembership();
                 }
             }

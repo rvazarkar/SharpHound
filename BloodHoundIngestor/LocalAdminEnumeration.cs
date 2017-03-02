@@ -17,30 +17,18 @@ namespace BloodHoundIngestor
         private Helpers Helpers;
         private Options options;
 
-        public LocalAdminEnumeration(Options cli)
+        public LocalAdminEnumeration()
         {
             Helpers = Helpers.Instance;
-            options = cli;
+            options = Helpers.Options;
         }
 
         public void EnumerateLocalAdmins()
         {
             Console.WriteLine("Starting Local Admin Enumeration");
-            List<string> Domains = new List<string>();
-            if (options.SearchForest)
-            {
-                Domains = Helpers.GetForestDomains();
-            }
-            else if (options.Domain != null)
-            {
-                Domains.Add(Helpers.GetDomain(options.Domain).Name);
-            }
-            else
-            {
-                Domains.Add(Helpers.GetDomain().Name);
-            }
+            List<string> Domains = Helpers.GetDomainList();
 
-            Writer w = new Writer(options);
+            Writer w = new Writer();
             Thread write = new Thread(unused => w.Write());
             write.Start();
 
@@ -55,7 +43,7 @@ namespace BloodHoundIngestor
                 for (int i = 0; i < options.Threads; i++)
                 {
                     doneEvents[i] = new ManualResetEvent(false);
-                    Enumerator e = new Enumerator(doneEvents[i], options);
+                    Enumerator e = new Enumerator(doneEvents[i]);
                     Thread consumer = new Thread(unused => e.ThreadCallback());
                     consumer.Start();
                 }
@@ -100,20 +88,13 @@ namespace BloodHoundIngestor
             }
         }
 
-        public class Enumerator
+        public class Enumerator : EnumeratorBase
         {
-            private ManualResetEvent _doneEvent;
-            private Options _options;
-            private Helpers _helpers;
-
-            public Enumerator(ManualResetEvent doneEvent, Options options)
+            public Enumerator(ManualResetEvent doneEvent) : base(doneEvent)
             {
-                _doneEvent = doneEvent;
-                _options = options;
-                _helpers = Helpers.Instance;
             }
 
-            public void ThreadCallback()
+            public override void ThreadCallback()
             {
                 while (true)
                 {
@@ -127,7 +108,7 @@ namespace BloodHoundIngestor
                         }
                         try
                         {
-                            EnumerateSystem(result);
+                            EnumerateResult(result);
                         }
                         catch (Exception ex)
                         {
@@ -139,7 +120,7 @@ namespace BloodHoundIngestor
                 _doneEvent.Set();
             }
 
-            public void EnumerateSystem(SearchResult result)
+            public override void EnumerateResult(SearchResult result)
             {
                 var y = result.Properties["dnshostname"];
                 string hostname;
@@ -189,6 +170,7 @@ namespace BloodHoundIngestor
                 }
             }
 
+            #region Helpers
             private List<LocalAdminInfo> LocalGroupWinNT(string Target, string Group)
             {
                 DirectoryEntry members = new DirectoryEntry(String.Format("WinNT://{0}/{1},group", Target, Group));
@@ -287,6 +269,7 @@ namespace BloodHoundIngestor
                 }
                 return users;
             }
+            #endregion
 
             #region pinvoke-imports
             [DllImport("NetAPI32.dll", CharSet = CharSet.Unicode)]
@@ -319,22 +302,17 @@ namespace BloodHoundIngestor
             #endregion
         }
 
-        public class Writer
+        public class Writer : WriterBase
         {
-            private Options _cli;
-            private int _localCount;
-
-            public Writer(Options cli)
+            public Writer() : base()
             {
-                _cli = cli;
-                _localCount = 0;
             }
 
-            public void Write()
+            public override void Write()
             {
-                if (_cli.URI == null)
+                if (_options.URI == null)
                 {
-                    using (StreamWriter writer = new StreamWriter(_cli.GetFilePath("local_admins.csv")))
+                    using (StreamWriter writer = new StreamWriter(_options.GetFilePath("local_admins.csv")))
                     {
                         writer.WriteLine("GroupName,AccountName,AccountType");
                         while (true)

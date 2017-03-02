@@ -10,13 +10,13 @@ using System.Text;
 
 namespace BloodHoundIngestor
 {
-    class Helpers
+    public class Helpers
     {
         private static Helpers instance;
 
         private Dictionary<String, Domain> DomainResolveCache;
         private List<String> DomainList;
-        private Options options;
+        private static Options options;
 
         public static void CreateInstance(Options cli)
         {
@@ -28,6 +28,14 @@ namespace BloodHoundIngestor
             get
             {
                 return instance;
+            }
+        }
+
+        public Options Options
+        {
+            get
+            {
+                return options;
             }
         }
 
@@ -76,6 +84,25 @@ namespace BloodHoundIngestor
             Searcher.ReferralChasing = ReferralChasingOption.All;
 
             return Searcher;
+        }
+
+        public List<string> GetDomainList()
+        {
+            List<string> Domains = new List<string>();
+            if (options.SearchForest)
+            {
+                Domains = GetForestDomains();
+            }
+            else if (options.Domain != null)
+            {
+                Domains.Add(GetDomain(options.Domain).Name);
+            }
+            else
+            {
+                Domains.Add(GetDomain().Name);
+            }
+
+            return Domains;
         }
 
         public List<String> GetForestDomains(string Forest = null)

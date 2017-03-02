@@ -18,10 +18,10 @@ namespace BloodHoundIngestor
         private Helpers Helpers;
         private Options options;
 
-        public DomainGroupEnumeration(Options cli)
+        public DomainGroupEnumeration()
         {
             Helpers = Helpers.Instance;
-            options = cli;
+            options = Helpers.Options;
         }
 
         public void EnumerateGroupMembership()
@@ -29,20 +29,11 @@ namespace BloodHoundIngestor
             EnumerationData data = new EnumerationData();
             Console.WriteLine("Starting Group Member Enumeration");
 
-            List<string> Domains = new List<string>();
-            
+            List<string> Domains = Helpers.GetDomainList();
+
             String[] props = new String[] { "samaccountname", "distinguishedname", "cn", "dnshostname", "samaccounttype", "primarygroupid", "memberof" };
-            if (options.SearchForest)
-            {
-                Domains = Helpers.GetForestDomains();
-            }else if (options.Domain != null)
-            {
-                Domains.Add(Helpers.GetDomain(options.Domain).Name);
-            }else
-            {
-                Domains.Add(Helpers.GetDomain().Name);
-            }
-            Writer w = new Writer(options);
+            
+            Writer w = new Writer();
             Thread write = new Thread(unused => w.Write());
             write.Start();
 
@@ -62,7 +53,7 @@ namespace BloodHoundIngestor
                 for (int i = 0; i < options.Threads; i++)
                 {
                     doneEvents[i] = new ManualResetEvent(false);
-                    Enumerator e = new Enumerator(doneEvents[i], options);
+                    Enumerator e = new Enumerator(doneEvents[i]);
                     Thread consumer = new Thread(unused => e.ThreadCallback());
                     consumer.Start();
                 }
@@ -118,20 +109,13 @@ namespace BloodHoundIngestor
         }
     }
 
-    public class Enumerator
+    public class Enumerator : EnumeratorBase
     {
-        private ManualResetEvent _doneEvent;
-        private Options _options;
-        private Helpers _helpers;
         private Type TranslateName;
         private object TranslateInstance;
 
-        public Enumerator(ManualResetEvent doneEvent, Options options)
+        public Enumerator(ManualResetEvent doneEvent) : base(doneEvent)
         {
-            _doneEvent = doneEvent;
-            _options = options;
-            _helpers = Helpers.Instance;
-
             TranslateName = Type.GetTypeFromProgID("NameTranslate");
             TranslateInstance = Activator.CreateInstance(TranslateName);
             
@@ -141,7 +125,7 @@ namespace BloodHoundIngestor
             TranslateName.InvokeMember("Init", BindingFlags.InvokeMethod, null, TranslateInstance, args);
         }
 
-        public void ThreadCallback()
+        public override void ThreadCallback()
         {
             while (true)
             {
@@ -167,70 +151,7 @@ namespace BloodHoundIngestor
             _doneEvent.Set();
         }
 
-        public enum ADSTypes
-        {
-            ADS_NAME_TYPE_DN = 1,
-            ADS_NAME_TYPE_CANONICAL = 2,
-            ADS_NAME_TYPE_NT4 = 3,
-            ADS_NAME_TYPE_DISPLAY = 4,
-            ADS_NAME_TYPE_DOMAIN_SIMPLE = 5,
-            ADS_NAME_TYPE_ENTERPRISE_SIMPLE = 6,
-            ADS_NAME_TYPE_GUID = 7,
-            ADS_NAME_TYPE_UNKNOWN = 8,
-            ADS_NAME_TYPE_USER_PRINCIPAL_NAME = 9,
-            ADS_NAME_TYPE_CANONICAL_EX = 10,
-            ADS_NAME_TYPE_SERVICE_PRINCIPAL_NAME = 11,
-            ADS_NAME_TYPE_SID_OR_SID_HISTORY_NAME = 12
-        }
-
-        public string ConvertADName(string ObjectName, ADSTypes InputType, ADSTypes OutputType)
-        {
-            string Domain;
-            if (InputType.Equals(ADSTypes.ADS_NAME_TYPE_NT4))
-            {
-                ObjectName = ObjectName.Replace("/", "\\");
-            }
-
-            switch (InputType)
-            {
-                case ADSTypes.ADS_NAME_TYPE_NT4:
-                    Domain = ObjectName.Split('\\')[0];
-                    break;
-                case ADSTypes.ADS_NAME_TYPE_DOMAIN_SIMPLE:
-                    Domain = ObjectName.Split('@')[1];
-                    break;
-                case ADSTypes.ADS_NAME_TYPE_CANONICAL:
-                    Domain = ObjectName.Split('/')[0];
-                    break;
-                case ADSTypes.ADS_NAME_TYPE_DN:
-                    Domain = ObjectName.Substring(ObjectName.IndexOf("DC=")).Replace("DC=", "").Replace(",", ".");
-                    break;
-            }
-
-            //PropertyInfo Referral = TranslateName.GetProperty("ChaseReferrals");
-            //Referral.SetValue(obj, 0x60, null);
-
-            try
-            {
-                object[] args = new object[2];
-                args[0] = (int)InputType;
-                args[1] = ObjectName;
-                TranslateName.InvokeMember("Set", BindingFlags.InvokeMethod, null, TranslateInstance, args);
-
-                args = new object[1];
-                args[0] = (int)OutputType;
-
-                string Result = (string)TranslateName.InvokeMember("Get", BindingFlags.InvokeMethod, null, TranslateInstance, args);
-
-                return Result;
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private void EnumerateResult(SearchResult result)
+        public override void EnumerateResult(SearchResult result)
         {
             string MemberDomain = null;
             string DistinguishedName = result.Properties["distinguishedname"][0].ToString();
@@ -413,24 +334,86 @@ namespace BloodHoundIngestor
                 _options.WriteVerbose(string.Format("Objects Enumerated: {0} out of {1}", EnumerationData.count, tot));
             }
         }
-    }
 
-    public class Writer
-    {
-        private Options _cli;
-        private int _localCount;
-
-        public Writer(Options cli)
+        #region helpers
+        public enum ADSTypes
         {
-            _cli = cli;
-            _localCount = 0;
+            ADS_NAME_TYPE_DN = 1,
+            ADS_NAME_TYPE_CANONICAL = 2,
+            ADS_NAME_TYPE_NT4 = 3,
+            ADS_NAME_TYPE_DISPLAY = 4,
+            ADS_NAME_TYPE_DOMAIN_SIMPLE = 5,
+            ADS_NAME_TYPE_ENTERPRISE_SIMPLE = 6,
+            ADS_NAME_TYPE_GUID = 7,
+            ADS_NAME_TYPE_UNKNOWN = 8,
+            ADS_NAME_TYPE_USER_PRINCIPAL_NAME = 9,
+            ADS_NAME_TYPE_CANONICAL_EX = 10,
+            ADS_NAME_TYPE_SERVICE_PRINCIPAL_NAME = 11,
+            ADS_NAME_TYPE_SID_OR_SID_HISTORY_NAME = 12
         }
 
-        public void Write()
+        public string ConvertADName(string ObjectName, ADSTypes InputType, ADSTypes OutputType)
         {
-            if (_cli.URI == null)
+            string Domain;
+            if (InputType.Equals(ADSTypes.ADS_NAME_TYPE_NT4))
             {
-                using (StreamWriter writer = new StreamWriter(_cli.GetFilePath("group_memberships.csv")))
+                ObjectName = ObjectName.Replace("/", "\\");
+            }
+
+            switch (InputType)
+            {
+                case ADSTypes.ADS_NAME_TYPE_NT4:
+                    Domain = ObjectName.Split('\\')[0];
+                    break;
+                case ADSTypes.ADS_NAME_TYPE_DOMAIN_SIMPLE:
+                    Domain = ObjectName.Split('@')[1];
+                    break;
+                case ADSTypes.ADS_NAME_TYPE_CANONICAL:
+                    Domain = ObjectName.Split('/')[0];
+                    break;
+                case ADSTypes.ADS_NAME_TYPE_DN:
+                    Domain = ObjectName.Substring(ObjectName.IndexOf("DC=")).Replace("DC=", "").Replace(",", ".");
+                    break;
+            }
+
+            //PropertyInfo Referral = TranslateName.GetProperty("ChaseReferrals");
+            //Referral.SetValue(obj, 0x60, null);
+
+            try
+            {
+                object[] args = new object[2];
+                args[0] = (int)InputType;
+                args[1] = ObjectName;
+                TranslateName.InvokeMember("Set", BindingFlags.InvokeMethod, null, TranslateInstance, args);
+
+                args = new object[1];
+                args[0] = (int)OutputType;
+
+                string Result = (string)TranslateName.InvokeMember("Get", BindingFlags.InvokeMethod, null, TranslateInstance, args);
+
+                return Result;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+        #endregion
+    }
+
+    public class Writer : WriterBase
+    {
+        public Writer() : base()
+        {
+
+        }
+
+        public override void Write()
+        {
+
+            if (_options.URI == null)
+            {
+                using (StreamWriter writer = new StreamWriter(_options.GetFilePath("group_memberships.csv")))
                 {
                     writer.WriteLine("GroupName,AccountName,AccountType");
                     while (true)

@@ -15,13 +15,13 @@ namespace BloodHoundIngestor
         private List<DomainTrust> EnumeratedTrusts;
         private Options options;
 
-        public DomainTrustMapping(Options cli)
+        public DomainTrustMapping()
         {
             Helpers = Helpers.Instance;
+            options = Helpers.Options;
             SeenDomains = new List<string>();
             Tracker = new Stack<Domain>();
             EnumeratedTrusts = new List<DomainTrust>();
-            options = cli;
         }
 
         public void GetDomainTrusts()

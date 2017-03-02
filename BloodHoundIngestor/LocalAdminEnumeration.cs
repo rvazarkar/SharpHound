@@ -146,7 +146,6 @@ namespace BloodHoundIngestor
                 if (y.Count > 0)
                 {
                     hostname = y[0].ToString();
-                    Console.WriteLine(hostname);
                 }else
                 {
                     return;
@@ -172,6 +171,9 @@ namespace BloodHoundIngestor
                         Interlocked.Increment(ref EnumerationData.done);
                         return;
                     }
+                }catch (Exception e){
+                    Console.WriteLine("Exception in local admin enum");
+                    Console.WriteLine(e);
                 }
                 Interlocked.Increment(ref EnumerationData.live);
                 Interlocked.Increment(ref EnumerationData.done);

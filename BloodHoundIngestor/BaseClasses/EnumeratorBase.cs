@@ -17,6 +17,7 @@ namespace BloodHoundIngestor
         {
             _helpers = Helpers.Instance;
             _options = _helpers.Options;
+            _doneEvent = doneEvent;
         }
 
         public abstract void ThreadCallback();

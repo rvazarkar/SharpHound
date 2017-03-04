@@ -64,7 +64,7 @@ namespace BloodHoundIngestor
                 EnumerationData.SearchResults.Enqueue(null);
 
                 WaitHandle.WaitAll(doneEvents);
-                Console.WriteLine(String.Format("Done group enumeration for domain {0} with {1} succesful hosts out of {2} queried", DomainName, EnumerationData.live, EnumerationData.done));
+                Console.WriteLine(String.Format("Done local admin enumeration for domain {0} with {1} succesful hosts out of {2} queried", DomainName, EnumerationData.live, EnumerationData.done));
             }
             EnumerationData.EnumResults.Enqueue(null);
             write.Join();

@@ -51,7 +51,7 @@ namespace BloodHoundIngestor
             return options.URI == null;
         }
 
-        public DirectorySearcher GetDomainSearcher(string Domain = null, string SearchBase = null)
+        public DirectorySearcher GetDomainSearcher(string Domain = null, string SearchBase = null, string ADSPath = null)
         {
             Domain TargetDomain = GetDomain(Domain);
             if (TargetDomain == null)
@@ -61,19 +61,28 @@ namespace BloodHoundIngestor
                 return null;
             }
 
-            string DomainName = TargetDomain.Name;
-            string Server = TargetDomain.PdcRoleOwner.Name;
-            string SearchString = "LDAP://";
-            SearchString += Server + "/";
-            if (SearchBase != null)
+            string SearchString;
+            
+            if (ADSPath == null)
             {
-                SearchString += SearchBase;
-            }
-            else
+                string DomainName = TargetDomain.Name;
+                string Server = TargetDomain.PdcRoleOwner.Name;
+                SearchString = "LDAP://";
+                SearchString += Server + "/";
+                if (SearchBase != null)
+                {
+                    SearchString += SearchBase;
+                }
+                else
+                {
+                    string DomainDN = DomainName.Replace(".", ",DC=");
+                    SearchString += "DC=" + DomainDN;
+                }
+            }else
             {
-                string DomainDN = DomainName.Replace(".", ",DC=");
-                SearchString += "DC=" + DomainDN;
+                SearchString = ADSPath;
             }
+            
 
             options.WriteVerbose(String.Format("[GetDomainSearcher] Search String: {0}", SearchString));
 
@@ -385,8 +394,9 @@ namespace BloodHoundIngestor
                         SecurityIdentifier identifier = new SecurityIdentifier(TrimmedCN);
                         result = identifier.Translate(typeof(NTAccount)).Value;
                     }
-                    catch
+                    catch (Exception e)
                     {
+                        Console.WriteLine(e);
                         options.WriteVerbose("Invalid SID " + cn);
                         result = null;
                     }

@@ -122,6 +122,10 @@ namespace BloodHoundIngestor
                 {
                     DomainGroupEnumeration GroupEnumeration = new DomainGroupEnumeration();
                     GroupEnumeration.EnumerateGroupMembership();
+                }else if (options.CollMethod.Equals(Options.CollectionMethod.Session))
+                {
+                    SessionEnumeration SessionEnum = new SessionEnumeration();
+                    SessionEnum.EnumerateSessions();
                 }
             }
             

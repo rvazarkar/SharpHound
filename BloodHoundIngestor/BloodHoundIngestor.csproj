@@ -75,7 +75,6 @@
     <None Include="PowerView.ps1" />
     <None Include="PowerView1.ps1" />
   </ItemGroup>
-  <ItemGroup />
   <ItemGroup>
     <Content Include="FodyWeavers.xml" />
   </ItemGroup>

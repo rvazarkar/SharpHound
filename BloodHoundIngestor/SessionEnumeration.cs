@@ -2,11 +2,14 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.DirectoryServices;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Security.Principal;
 using System.Text;
 using System.Threading;
 using static BloodHoundIngestor.SessionEnumeration;
@@ -30,7 +33,52 @@ namespace BloodHoundIngestor
 
             List<string> Domains = Helpers.GetDomainList();
 
-            GetGCMapping();
+            Writer w = new Writer();
+            Thread write = new Thread(unused => w.Write());
+            write.Start();
+
+            Stopwatch watch = Stopwatch.StartNew();
+
+            if (!options.SkipGCDeconfliction)
+            {
+                GetGCMapping();
+            }
+
+            foreach (string DomainName in Domains)
+            {
+                EnumerationData.Reset();
+                EnumerationData.DomainName = DomainName;
+
+                ManualResetEvent[] doneEvents = new ManualResetEvent[options.Threads];
+
+                for (int i = 0; i < options.Threads; i++)
+                {
+                    doneEvents[i] = new ManualResetEvent(false);
+                    Enumerator e = new Enumerator(doneEvents[i]);
+                    Thread consumer = new Thread(unused => e.ThreadCallback());
+                    consumer.Start();
+                }
+
+                int lTotal = 0;
+
+                DirectorySearcher searcher = Helpers.GetDomainSearcher(DomainName);
+                searcher.Filter = "(sAMAccountType=805306369)";
+                searcher.PropertiesToLoad.Add("dnshostname");
+                foreach (SearchResult x in searcher.FindAll())
+                {
+                    EnumerationData.SearchResults.Enqueue(x);
+                    lTotal += 1;
+                }
+                searcher.Dispose();
+
+                EnumerationData.total = lTotal;
+                EnumerationData.SearchResults.Enqueue(null);
+
+                WaitHandle.WaitAll(doneEvents);
+                Console.WriteLine(String.Format("Done session enumeration for domain {0} with {1} succesful hosts out of {2} queried", DomainName, EnumerationData.live, EnumerationData.done));
+            }
+            EnumerationData.EnumResults.Enqueue(null);
+            write.Join();
         }
 
         private void GetNetFileServer(string DomainName)
@@ -40,25 +88,12 @@ namespace BloodHoundIngestor
             //searcher.PropertiesToLoad.AddRange(new string[] { "homedirectory", "scriptpath", "profilepath" });
         }
 
-        private void ConvertADName(string DomainName,)
-        {
-
-            Type TranslateName = Type.GetTypeFromProgID("NameTranslate");
-            object TranslateInstance = Activator.CreateInstance(TranslateName);
-
-            //Can we use GC instead of domain here since we're going to be using this method entirely for GC mapping?
-            object[] args = new object[2];
-            args[0] = 3;
-            args[1] = "";
-            TranslateName.InvokeMember("Init", BindingFlags.InvokeMethod, null, TranslateInstance, args);
-        }
-
         private void GetGCMapping()
         {
             options.WriteVerbose("Starting Global Catalog Mapping");
             string path = new DirectoryEntry("LDAP://RootDSE").Properties["dnshostname"].Value.ToString();
 
-            DirectorySearcher GCSearcher = Helpers.GetDomainSearcher(ADSPath: path);
+            DirectorySearcher GCSearcher = Helpers.GetDomainSearcher(ADSPath: "GC://" + path);
             GCSearcher.Filter = "(samAccountType=805306368)";
             GCSearcher.PropertiesToLoad.AddRange(new string[] { "samaccountname", "distinguishedname", "cn", "objectsid" });
 
@@ -69,17 +104,64 @@ namespace BloodHoundIngestor
                     continue;
                 }
 
-                if (result.Properties["distinguisedname"].Count == 0)
+                if (result.Properties["distinguishedname"].Count == 0)
                 {
                     continue;
                 }
 
                 string username = result.Properties["samaccountname"][0].ToString().ToUpper();
-                string dn = result.Properties["distinguisedname"][0].ToString();
+                string dn = result.Properties["distinguishedname"][0].ToString();
+
+                if (dn == "")
+                {
+                    continue;
+                }
+
+                string MemberName = null;
+                string MemberDomain = null;
 
                 if (dn.Contains("ForeignSecurityPrincipals") && dn.Contains("S-1-5-21"))
                 {
+                    try
+                    {
+                        string cn = result.Properties["cn"][0].ToString();
+                        byte[] sid = (byte[])result.Properties["objectsid"][0];
+                        string usersid = new SecurityIdentifier(sid,0).Value;
 
+                        MemberName = ConvertADName(Helpers.ConvertSIDToName(usersid), ADSTypes.ADS_NAME_TYPE_NT4, ADSTypes.ADS_NAME_TYPE_CANONICAL);
+                        if (MemberName == null)
+                        {
+                            continue;
+                        }
+
+                        MemberDomain = MemberName.Split('/')[0];
+                    }
+                    catch
+                    {
+                        Helpers.Options.WriteVerbose("Error Converting " + dn);
+                    }
+                }else
+                {
+                    MemberDomain = dn.Substring(dn.IndexOf("DC=")).Replace("DC=", "").Replace(",", ".").ToUpper();
+                }
+
+                if (MemberDomain != null)
+                {
+                    if (!EnumerationData.GCMappings.ContainsKey(username))
+                    {
+                        List<string> data = new List<string>();
+                        data.Add(MemberDomain);
+                        EnumerationData.GCMappings.TryAdd(username, data);
+                    }
+                    List<String> mapped;
+                    if (EnumerationData.GCMappings.TryGetValue(username, out mapped))
+                    {
+                        if (!mapped.Contains(MemberDomain))
+                        {
+                            mapped.Add(MemberDomain);
+                            EnumerationData.GCMappings[username] = mapped;
+                        }
+                    }
                 }
             }
 
@@ -89,20 +171,96 @@ namespace BloodHoundIngestor
 
 
         }
+        #region helpers
+        public enum ADSTypes
+        {
+            ADS_NAME_TYPE_DN = 1,
+            ADS_NAME_TYPE_CANONICAL = 2,
+            ADS_NAME_TYPE_NT4 = 3,
+            ADS_NAME_TYPE_DISPLAY = 4,
+            ADS_NAME_TYPE_DOMAIN_SIMPLE = 5,
+            ADS_NAME_TYPE_ENTERPRISE_SIMPLE = 6,
+            ADS_NAME_TYPE_GUID = 7,
+            ADS_NAME_TYPE_UNKNOWN = 8,
+            ADS_NAME_TYPE_USER_PRINCIPAL_NAME = 9,
+            ADS_NAME_TYPE_CANONICAL_EX = 10,
+            ADS_NAME_TYPE_SERVICE_PRINCIPAL_NAME = 11,
+            ADS_NAME_TYPE_SID_OR_SID_HISTORY_NAME = 12
+        }
+
+        public string ConvertADName(string ObjectName, ADSTypes InputType, ADSTypes OutputType)
+        {
+            string Domain;
+            if (InputType.Equals(ADSTypes.ADS_NAME_TYPE_NT4))
+            {
+                ObjectName = ObjectName.Replace("/", "\\");
+            }
+
+            switch (InputType)
+            {
+                case ADSTypes.ADS_NAME_TYPE_NT4:
+                    Domain = ObjectName.Split('\\')[0];
+                    break;
+                case ADSTypes.ADS_NAME_TYPE_DOMAIN_SIMPLE:
+                    Domain = ObjectName.Split('@')[1];
+                    break;
+                case ADSTypes.ADS_NAME_TYPE_CANONICAL:
+                    Domain = ObjectName.Split('/')[0];
+                    break;
+                case ADSTypes.ADS_NAME_TYPE_DN:
+                    Domain = ObjectName.Substring(ObjectName.IndexOf("DC=")).Replace("DC=", "").Replace(",", ".");
+                    break;
+                default:
+                    Domain = "";
+                    break;
+            }
+
+
+            try
+            {
+                Type TranslateName = Type.GetTypeFromProgID("NameTranslate");
+                object TranslateInstance = Activator.CreateInstance(TranslateName);
+
+                object[] args = new object[2];
+                args[0] = 1;
+                args[1] = Domain;
+                TranslateName.InvokeMember("Init", BindingFlags.InvokeMethod, null, TranslateInstance, args);
+
+                PropertyInfo Referral = TranslateName.GetProperty("ChaseReferrals");
+                Referral.SetValue(TranslateInstance, 0x60, null);
+
+                args = new object[2];
+                args[0] = (int)InputType;
+                args[1] = ObjectName;
+                TranslateName.InvokeMember("Set", BindingFlags.InvokeMethod, null, TranslateInstance, args);
+
+                args = new object[1];
+                args[0] = (int)OutputType;
+
+                string Result = (string)TranslateName.InvokeMember("Get", BindingFlags.InvokeMethod, null, TranslateInstance, args);
+
+                return Result;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+#endregion
 
         public class EnumerationData
         {
             public static ConcurrentQueue<SearchResult> SearchResults;
             public static ConcurrentQueue<SessionInfo> EnumResults = new ConcurrentQueue<SessionInfo>();
-            public static ConcurrentDictionary<string, string> GCMappings;
+            public static ConcurrentDictionary<string, List<String>> GCMappings = new ConcurrentDictionary<string, List<String>>();
             public static int live = 0;
             public static int done = 0;
             public static int total = 0;
+            public static string DomainName { get; set; }
 
             public static void Reset()
             {
                 SearchResults = new ConcurrentQueue<SearchResult>();
-                GCMappings = new ConcurrentDictionary<string, string>();
                 live = 0;
                 done = 0;
                 total = 0;
@@ -169,12 +327,36 @@ namespace BloodHoundIngestor
 
             public override void EnumerateResult(SearchResult result)
             {
-                throw new NotImplementedException();
+                string hostname = result.Properties["dnshostname"][0].ToString();
+                List<SessionInfo> sessions = GetNetSessions(hostname);
+
+                sessions.ForEach(EnumerationData.EnumResults.Enqueue);
             }
 
             public override void ThreadCallback()
             {
-                throw new NotImplementedException();
+                while (true)
+                {
+                    SearchResult result;
+                    if (EnumerationData.SearchResults.TryDequeue(out result))
+                    {
+                        if (result == null)
+                        {
+                            EnumerationData.SearchResults.Enqueue(result);
+                            break;
+                        }
+                        try
+                        {
+                            EnumerateResult(result);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine(ex);
+                        }
+
+                    }
+                }
+                _doneEvent.Set();
             }
 
             public List<SessionInfo> GetNetSessions(string server)
@@ -183,35 +365,124 @@ namespace BloodHoundIngestor
                 IntPtr BufPtr;
                 int res = 0;
                 Int32 er = 0, tr = 0, resume = 0;
-                BufPtr = (IntPtr)Marshal.SizeOf(typeof(SESSION_INFO_502));
-                SESSION_INFO_502[] results = new SESSION_INFO_502[0];
+                BufPtr = (IntPtr)Marshal.SizeOf(typeof(SESSION_INFO_10));
+                SESSION_INFO_10[] results = new SESSION_INFO_10[0];
                 do
                 {
-                    res = NetSessionEnum(server, null, null, 502, out BufPtr, -1, ref er, ref tr, ref resume);
-                    results = new SESSION_INFO_502[er];
+                    res = NetSessionEnum(server, null, null, 10, out BufPtr, -1, ref er, ref tr, ref resume);
+                    results = new SESSION_INFO_10[er];
                     if (res == (int)NERR.ERROR_MORE_DATA || res == (int)NERR.NERR_Success)
                     {
                         Int32 p = BufPtr.ToInt32();
                         for (int i = 0; i < er; i++)
                         {
 
-                            SESSION_INFO_502 si = (SESSION_INFO_502)Marshal.PtrToStructure(new IntPtr(p), typeof(SESSION_INFO_502));
+                            SESSION_INFO_10 si = (SESSION_INFO_10)Marshal.PtrToStructure(new IntPtr(p), typeof(SESSION_INFO_10));
                             results[i] = si;
-                            p += Marshal.SizeOf(typeof(SESSION_INFO_502));
+                            p += Marshal.SizeOf(typeof(SESSION_INFO_10));
                         }
                     }
                     Marshal.FreeHGlobal(BufPtr);
                 }
                 while (res == (int)NERR.ERROR_MORE_DATA);
-
-                foreach (SESSION_INFO_502 x in results)
+                
+                foreach (SESSION_INFO_10 x in results)
                 {
-                    string username = x.sesi502_username;
-                    string cname = x.sesi502_cname;
+                    string username = x.sesi10_username;
+                    string cname = x.sesi10_cname;
+                    string dnsname;
 
+                    if (cname != null && cname.StartsWith("\\"))
+                    {
+                        cname = cname.TrimStart('\\');
+                    }
+
+                    if (username.Trim() != "" && username != "$" && username != currentUser)
+                    {
+                        try
+                        {
+                            dnsname = System.Net.Dns.GetHostEntry(cname).HostName;
+                            string ComputerDomain = dnsname.Substring(dnsname.IndexOf(".") + 1).ToUpper();
+                            if (_helpers.Options.SkipGCDeconfliction)
+                            {
+                                string LoggedOnUser = string.Format("{0}@{1}", username.ToUpper(), ComputerDomain);
+                                toReturn.Add(new SessionInfo()
+                                {
+                                    ComputerName = dnsname,
+                                    UserName = LoggedOnUser,
+                                    Weight = 2
+                                });
+                            }else
+                            {
+                                string UserDomain = null;
+                                if (EnumerationData.GCMappings.ContainsKey(username))
+                                {
+                                    List<string> possible;
+                                    if (EnumerationData.GCMappings.TryGetValue(username, out possible))
+                                    {
+                                        if (possible.Count == 1)
+                                        {
+                                            UserDomain = possible.First();
+                                            string LoggedOnUser = string.Format("{0}@{1}", username.ToUpper(), UserDomain);
+                                            toReturn.Add(new SessionInfo()
+                                            {
+                                                ComputerName = dnsname,
+                                                UserName = LoggedOnUser,
+                                                Weight = 1
+                                            });
+                                        } else
+                                        {
+                                            foreach (string d in possible)
+                                            {
+                                                string LoggedOnUser = string.Format("{0}@{1}", username.ToUpper(), d);
+                                                toReturn.Add(new SessionInfo()
+                                                {
+                                                    ComputerName = dnsname,
+                                                    UserName = LoggedOnUser,
+                                                    Weight = UserDomain.Equals(d) ? 1 : 2
+                                                });
+                                            }
+                                        }
+                                    }else
+                                    {
+                                        // The user isn't in the GC for whatever reason. We'll default to computer domain
+                                        string LoggedOnUser = string.Format("{0}@{1}", username.ToUpper(), ComputerDomain);
+                                        toReturn.Add(new SessionInfo()
+                                        {
+                                            ComputerName = dnsname,
+                                            UserName = LoggedOnUser,
+                                            Weight = 2
+                                        });
+                                    }
+                                }else
+                                {
+                                    // The user isn't in the GC for whatever reason. We'll default to computer domain
+                                    string LoggedOnUser = string.Format("{0}@{1}", username.ToUpper(), ComputerDomain);
+                                    toReturn.Add(new SessionInfo()
+                                    {
+                                        ComputerName = dnsname,
+                                        UserName = LoggedOnUser,
+                                        Weight = 2
+                                    });
+                                }
+                            }
+                        }
+                        catch
+                        {
+                            string LoggedOnUser = string.Format("{0}@{1}", username.ToUpper(), EnumerationData.DomainName);
+                            toReturn.Add(new SessionInfo()
+                            {
+                                ComputerName = cname,
+                                UserName = LoggedOnUser,
+                                Weight = 2
+                            });
+                        }
+                    }
                 }
 
-                return null;
+                Interlocked.Increment(ref EnumerationData.done);
+                Interlocked.Increment(ref EnumerationData.live);
+                return toReturn;
             }
         }
 
@@ -229,20 +500,14 @@ namespace BloodHoundIngestor
             ref Int32 resume_handle);
 
         [StructLayout(LayoutKind.Sequential)]
-        public struct SESSION_INFO_502
+        public struct SESSION_INFO_10
         {
             [MarshalAs(UnmanagedType.LPWStr)]
-            public string sesi502_cname;
+            public string sesi10_cname;
             [MarshalAs(UnmanagedType.LPWStr)]
-            public string sesi502_username;
-            public uint sesi502_num_opens;
-            public uint sesi502_time;
-            public uint sesi502_idle_time;
-            public uint sesi502_user_flags;
-            [MarshalAs(UnmanagedType.LPWStr)]
-            public string sesi502_cltype_name;
-            [MarshalAs(UnmanagedType.LPWStr)]
-            public string sesi502_transport;
+            public string sesi10_username;
+            public uint sesi10_time;
+            public uint sesi10_idle_time;
         }
 
         public enum NERR

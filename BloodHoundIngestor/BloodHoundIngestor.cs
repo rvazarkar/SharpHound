@@ -51,6 +51,9 @@ namespace BloodHoundIngestor
         [Option("UserPass", DefaultValue = null, HelpText ="username:password for the Neo4j Rest API")]
         public string UserPass { get; set; }
 
+        [Option("SkipGCDeconfliction",DefaultValue =false,HelpText ="Skip Global Catalog Deconfliction for Sessions")]
+        public bool SkipGCDeconfliction { get; set; }
+
         [ParserState]
         public IParserState LastParserState { get; set; }
 

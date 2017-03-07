@@ -169,13 +169,6 @@ namespace BloodHoundIngestor
 
             public Enumerator(ManualResetEvent doneEvent) : base(doneEvent)
             {
-                TranslateName = Type.GetTypeFromProgID("NameTranslate");
-                TranslateInstance = Activator.CreateInstance(TranslateName);
-
-                object[] args = new object[2];
-                args[0] = 1;
-                args[1] = EnumerationData.DomainName;
-                TranslateName.InvokeMember("Init", BindingFlags.InvokeMethod, null, TranslateInstance, args);
             }
 
             public override void ThreadCallback()
@@ -428,14 +421,26 @@ namespace BloodHoundIngestor
                     case ADSTypes.ADS_NAME_TYPE_DN:
                         Domain = ObjectName.Substring(ObjectName.IndexOf("DC=")).Replace("DC=", "").Replace(",", ".");
                         break;
+                    default:
+                        Domain = "";
+                        break;
                 }
 
-                //PropertyInfo Referral = TranslateName.GetProperty("ChaseReferrals");
-                //Referral.SetValue(obj, 0x60, null);
 
                 try
                 {
+                    TranslateName = Type.GetTypeFromProgID("NameTranslate");
+                    TranslateInstance = Activator.CreateInstance(TranslateName);
+
                     object[] args = new object[2];
+                    args[0] = 1;
+                    args[1] = Domain;
+                    TranslateName.InvokeMember("Init", BindingFlags.InvokeMethod, null, TranslateInstance, args);
+
+                    PropertyInfo Referral = TranslateName.GetProperty("ChaseReferrals");
+                    Referral.SetValue(TranslateInstance, 0x60, null);
+
+                    args = new object[2];
                     args[0] = (int)InputType;
                     args[1] = ObjectName;
                     TranslateName.InvokeMember("Set", BindingFlags.InvokeMethod, null, TranslateInstance, args);

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.DirectoryServices;
 using System.DirectoryServices.ActiveDirectory;
@@ -14,7 +15,8 @@ namespace BloodHoundIngestor
     {
         private static Helpers instance;
 
-        private Dictionary<String, Domain> DomainResolveCache;
+        private ConcurrentDictionary<string, Domain> DomainResolveCache;
+        private ConcurrentDictionary<string, string> SidConversionCache;
         private List<String> DomainList;
         private static Options options;
 
@@ -41,7 +43,8 @@ namespace BloodHoundIngestor
 
         public Helpers(Options cli)
         {
-            DomainResolveCache = new Dictionary<string, Domain>();
+            DomainResolveCache = new ConcurrentDictionary<string, Domain>();
+            SidConversionCache = new ConcurrentDictionary<string, string>();
             DomainList = null;
             options = cli;
         }
@@ -159,7 +162,9 @@ namespace BloodHoundIngestor
             string key = Domain == null ? "UNIQUENULLOBJECT" : Domain;
             if (DomainResolveCache.ContainsKey(key))
             {
-                return DomainResolveCache[key];
+                Domain t;
+                DomainResolveCache.TryGetValue(key, out t);
+                return t;
             }
 
             if (Domain == null)
@@ -190,11 +195,11 @@ namespace BloodHoundIngestor
             }
             if (Domain == null)
             {
-                DomainResolveCache["UNIQUENULLOBJECT"] = DomainObject;
+                DomainResolveCache.TryAdd("UNIQUENULLOBJECT", DomainObject);
             }
             else
             {
-                DomainResolveCache[Domain] = DomainObject;
+                DomainResolveCache.TryAdd(Domain, DomainObject);
             }
             return DomainObject;
         }
@@ -203,6 +208,11 @@ namespace BloodHoundIngestor
         {
             string TrimmedCN = cn.Trim('*');
             string result;
+            if (SidConversionCache.TryGetValue(TrimmedCN, out result))
+            {
+                return result;
+            }
+            
             switch (TrimmedCN)
             {
                 case "S-1-0":
@@ -403,6 +413,7 @@ namespace BloodHoundIngestor
 
                     break;
             }
+            SidConversionCache.TryAdd(TrimmedCN, result);
             return result;
         }
 

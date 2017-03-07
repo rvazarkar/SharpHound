@@ -12,7 +12,11 @@ using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Text;
 using System.Threading;
+using System.Management;
 using static BloodHoundIngestor.SessionEnumeration;
+using Microsoft.Win32;
+using System.Text.RegularExpressions;
+using static BloodHoundIngestor.Options;
 
 namespace BloodHoundIngestor
 {
@@ -128,13 +132,13 @@ namespace BloodHoundIngestor
                         byte[] sid = (byte[])result.Properties["objectsid"][0];
                         string usersid = new SecurityIdentifier(sid,0).Value;
 
-                        MemberName = ConvertADName(Helpers.ConvertSIDToName(usersid), ADSTypes.ADS_NAME_TYPE_NT4, ADSTypes.ADS_NAME_TYPE_CANONICAL);
+                        MemberName = Helpers.ConvertSIDToName(usersid);
                         if (MemberName == null)
                         {
                             continue;
                         }
 
-                        MemberDomain = MemberName.Split('/')[0];
+                        MemberDomain = Helpers.GetDomain(MemberName.Split('\\')[0]).Name;
                     }
                     catch
                     {
@@ -253,6 +257,7 @@ namespace BloodHoundIngestor
             public static ConcurrentQueue<SearchResult> SearchResults;
             public static ConcurrentQueue<SessionInfo> EnumResults = new ConcurrentQueue<SessionInfo>();
             public static ConcurrentDictionary<string, List<String>> GCMappings = new ConcurrentDictionary<string, List<String>>();
+            public static ConcurrentDictionary<string, string> ResolveCache = new ConcurrentDictionary<string, string>();
             public static int live = 0;
             public static int done = 0;
             public static int total = 0;
@@ -320,6 +325,7 @@ namespace BloodHoundIngestor
         public class Enumerator : EnumeratorBase
         {
             private string currentUser;
+
             public Enumerator(ManualResetEvent done) : base(done)
             {
                 currentUser = Environment.UserName;
@@ -328,8 +334,21 @@ namespace BloodHoundIngestor
             public override void EnumerateResult(SearchResult result)
             {
                 string hostname = result.Properties["dnshostname"][0].ToString();
-                List<SessionInfo> sessions = GetNetSessions(hostname);
+                List<SessionInfo> sessions = new List<SessionInfo>();
 
+                CollectionMethod c = _helpers.Options.CollMethod;
+                if (c.Equals(CollectionMethod.LoggedOn))
+                {
+                    sessions.AddRange(GetNetLoggedOn(hostname));
+                    sessions.AddRange(GetLocalLoggedOn(hostname));
+                }else if (c.Equals(CollectionMethod.Stealth))
+                {
+
+                }else
+                {
+                    sessions.AddRange(GetNetSessions(hostname));
+                }
+                
                 sessions.ForEach(EnumerationData.EnumResults.Enqueue);
             }
 
@@ -359,7 +378,116 @@ namespace BloodHoundIngestor
                 _doneEvent.Set();
             }
 
-            public List<SessionInfo> GetNetSessions(string server)
+            private List<SessionInfo> GetNetLoggedOn(string server)
+            {
+                List<SessionInfo> results = new List<SessionInfo>();
+
+                int QueryLevel = 1;
+                IntPtr info = IntPtr.Zero;
+                int EntriesRead = 0;
+                int TotalRead = 0;
+                int ResumeHandle = 0;
+
+                Type tWui1 = typeof(WKSTA_USER_INFO_1);
+                int nStructSize = Marshal.SizeOf(tWui1);
+
+                int result = NetWkstaUserEnum(server, QueryLevel, out info, -1, out EntriesRead, out TotalRead, ref ResumeHandle);
+                long offset = info.ToInt64();
+
+                if (result == 0 || result == 234)
+                {
+                    if (EntriesRead > 0)
+                    {
+                        IntPtr p = info;
+                        for (int i = 0; i < EntriesRead; i++)
+                        {
+                            WKSTA_USER_INFO_1 data = (WKSTA_USER_INFO_1)Marshal.PtrToStructure(p, tWui1);
+                            string username = data.wkui1_username;
+                            string domain = data.wkui1_logon_domain;
+                            string servername = server.Split('.')[0].ToUpper();
+
+                            if (username.Trim() == "" || username.EndsWith("$") || servername.ToUpper().Equals(domain))
+                            {
+                                continue;
+                            }
+                            
+                            string MemberName = string.Format("{0}@{1}", username, _helpers.GetDomain(domain).Name);
+                            
+                            results.Add(new SessionInfo()
+                            {
+                                ComputerName = server,
+                                UserName = MemberName,
+                                Weight = 1
+                            });
+                            
+                            p = (IntPtr)((int)p + nStructSize);
+                        }
+                    }
+                }
+
+                if (info != IntPtr.Zero)
+                {
+                    NetApiBufferFree(info);
+                }
+
+                return results;
+            }
+
+            private List<SessionInfo> GetLocalLoggedOn(string server)
+            {
+                List<SessionInfo> results = new List<SessionInfo>();
+
+                try
+                {
+                    RegistryKey key;
+                    if (Environment.MachineName.Equals(server.Split('.')[0]))
+                    {
+                        key = RegistryKey.OpenRemoteBaseKey(RegistryHive.Users, "");
+                    }
+                    else
+                    {
+                        key = RegistryKey.OpenRemoteBaseKey(RegistryHive.Users, server);
+                    }
+                    
+                    var filtered = key.GetSubKeyNames().Where(sub => Regex.IsMatch(sub, "S-1-5-21-[0-9]+-[0-9]+-[0-9]+-[0-9]+$"));
+
+                    foreach (var x in filtered)
+                    {
+                        string full = _helpers.ConvertSIDToName(x);
+                        if (!full.Contains("\\"))
+                        {
+                            continue;
+                        }
+
+                        string servername = server.Split('.')[0].ToUpper();
+                        var parts = full.Split('\\');
+                        string username = parts[1];
+                        string domain = parts[0];
+
+                        if (domain.ToUpper().Equals(servername))
+                        {
+                            continue;
+                        }
+
+                        string MemberName = string.Format("{0}@{1}", username, _helpers.GetDomain(domain).Name);
+
+                        results.Add(new SessionInfo()
+                        {
+                            ComputerName = server,
+                            UserName = MemberName,
+                            Weight = 1
+                        });
+                        
+                    }
+                }
+                catch
+                {
+                    
+                }
+                return results;
+            }
+
+            private List<SessionInfo> GetNetSessions(string server)
             {
                 List<SessionInfo> toReturn = new List<SessionInfo>();
                 IntPtr BufPtr;
@@ -401,7 +529,16 @@ namespace BloodHoundIngestor
                     {
                         try
                         {
-                            dnsname = System.Net.Dns.GetHostEntry(cname).HostName;
+                            if (!EnumerationData.ResolveCache.TryGetValue(cname, out dnsname))
+                            {
+                                dnsname = System.Net.Dns.GetHostEntry(cname).HostName;
+                                EnumerationData.ResolveCache.TryAdd(cname, dnsname);
+                            }
+
+                            if (dnsname == null)
+                            {
+                                throw new Exception();
+                            }
                             string ComputerDomain = dnsname.Substring(dnsname.IndexOf(".") + 1).ToUpper();
                             if (_helpers.Options.SkipGCDeconfliction)
                             {
@@ -469,6 +606,7 @@ namespace BloodHoundIngestor
                         }
                         catch
                         {
+                            EnumerationData.ResolveCache.TryAdd(cname, null);
                             string LoggedOnUser = string.Format("{0}@{1}", username.ToUpper(), EnumerationData.DomainName);
                             toReturn.Add(new SessionInfo()
                             {
@@ -484,51 +622,80 @@ namespace BloodHoundIngestor
                 Interlocked.Increment(ref EnumerationData.live);
                 return toReturn;
             }
-        }
 
-        #region pinvoke imports
-        [DllImport("netapi32.dll", SetLastError = true)]
-        private static extern int NetSessionEnum(
-            [In, MarshalAs(UnmanagedType.LPWStr)] string ServerName,
-            [In, MarshalAs(UnmanagedType.LPWStr)] string UncClientName,
-            [In, MarshalAs(UnmanagedType.LPWStr)] string UserName,
-            Int32 Level,
-            out IntPtr bufptr,
-            int prefmaxlen,
-            ref Int32 entriesread,
-            ref Int32 totalentries,
-            ref Int32 resume_handle);
+            #region pinvoke imports
+            [DllImport("netapi32.dll", SetLastError = true)]
+            private static extern int NetSessionEnum(
+                [In, MarshalAs(UnmanagedType.LPWStr)] string ServerName,
+                [In, MarshalAs(UnmanagedType.LPWStr)] string UncClientName,
+                [In, MarshalAs(UnmanagedType.LPWStr)] string UserName,
+                Int32 Level,
+                out IntPtr bufptr,
+                int prefmaxlen,
+                ref Int32 entriesread,
+                ref Int32 totalentries,
+                ref Int32 resume_handle);
 
-        [StructLayout(LayoutKind.Sequential)]
-        public struct SESSION_INFO_10
-        {
-            [MarshalAs(UnmanagedType.LPWStr)]
-            public string sesi10_cname;
-            [MarshalAs(UnmanagedType.LPWStr)]
-            public string sesi10_username;
-            public uint sesi10_time;
-            public uint sesi10_idle_time;
-        }
+            [StructLayout(LayoutKind.Sequential)]
+            public struct SESSION_INFO_10
+            {
+                [MarshalAs(UnmanagedType.LPWStr)]
+                public string sesi10_cname;
+                [MarshalAs(UnmanagedType.LPWStr)]
+                public string sesi10_username;
+                public uint sesi10_time;
+                public uint sesi10_idle_time;
+            }
 
-        public enum NERR
-        {
-            NERR_Success = 0,
-            ERROR_MORE_DATA = 234,
-            ERROR_NO_BROWSER_SERVERS_FOUND = 6118,
-            ERROR_INVALID_LEVEL = 124,
-            ERROR_ACCESS_DENIED = 5,
-            ERROR_INVALID_PARAMETER = 87,
-            ERROR_NOT_ENOUGH_MEMORY = 8,
-            ERROR_NETWORK_BUSY = 54,
-            ERROR_BAD_NETPATH = 53,
-            ERROR_NO_NETWORK = 1222,
-            ERROR_INVALID_HANDLE_STATE = 1609,
-            ERROR_EXTENDED_ERROR = 1208,
-            NERR_BASE = 2100,
-            NERR_UnknownDevDir = (NERR_BASE + 16),
-            NERR_DuplicateShare = (NERR_BASE + 18),
-            NERR_BufTooSmall = (NERR_BASE + 23)
+            public enum NERR
+            {
+                NERR_Success = 0,
+                ERROR_MORE_DATA = 234,
+                ERROR_NO_BROWSER_SERVERS_FOUND = 6118,
+                ERROR_INVALID_LEVEL = 124,
+                ERROR_ACCESS_DENIED = 5,
+                ERROR_INVALID_PARAMETER = 87,
+                ERROR_NOT_ENOUGH_MEMORY = 8,
+                ERROR_NETWORK_BUSY = 54,
+                ERROR_BAD_NETPATH = 53,
+                ERROR_NO_NETWORK = 1222,
+                ERROR_INVALID_HANDLE_STATE = 1609,
+                ERROR_EXTENDED_ERROR = 1208,
+                NERR_BASE = 2100,
+                NERR_UnknownDevDir = (NERR_BASE + 16),
+                NERR_DuplicateShare = (NERR_BASE + 18),
+                NERR_BufTooSmall = (NERR_BASE + 23)
+            }
+
+            [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+            public struct WKSTA_USER_INFO_0
+            {
+                public string wkui0_username;
+            }
+
+            [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+            public struct WKSTA_USER_INFO_1
+            {
+                public string wkui1_username;
+                public string wkui1_logon_domain;
+                public string wkui1_oth_domains;
+                public string wkui1_logon_server;
+            }
+
+            [DllImport("netapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+            static extern int NetWkstaUserEnum(
+               string servername,
+               int level,
+               out IntPtr bufptr,
+               int prefmaxlen,
+               out int entriesread,
+               out int totalentries,
+               ref int resume_handle);
+
+            [DllImport("netapi32.dll")]
+            static extern int NetApiBufferFree(
+                IntPtr Buffer);
+            #endregion
         }
-        #endregion
     }
 }

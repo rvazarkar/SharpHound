@@ -437,9 +437,6 @@ namespace BloodHoundIngestor
                     args[1] = Domain;
                     TranslateName.InvokeMember("Init", BindingFlags.InvokeMethod, null, TranslateInstance, args);
 
-                    PropertyInfo Referral = TranslateName.GetProperty("ChaseReferrals");
-                    Referral.SetValue(TranslateInstance, 0x60, null);
-
                     args = new object[2];
                     args[0] = (int)InputType;
                     args[1] = ObjectName;

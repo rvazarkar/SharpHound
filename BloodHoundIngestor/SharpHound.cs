@@ -4,6 +4,7 @@ using System;
 using System.DirectoryServices.ActiveDirectory;
 using System.IO;
 using System.Security.Permissions;
+using static SharpHound.Options;
 
 namespace SharpHound
 {
@@ -17,7 +18,6 @@ namespace SharpHound
             Session,
             LoggedOn,
             Trusts,
-            Stealth,
             Default
         }
 
@@ -56,6 +56,9 @@ namespace SharpHound
 
         [Option("PingTimeout", DefaultValue = 750,HelpText ="Timeout in Milliseconds for Ping Checks")]
         public int PingTimeout { get; set; }
+
+        [Option("Stealth", DefaultValue =false, HelpText ="Use stealth collection options")]
+        public bool Stealth { get; set; }
 
         [ParserState]
         public IParserState LastParserState { get; set; }
@@ -107,38 +110,49 @@ namespace SharpHound
                     Console.WriteLine("Unable to contact domain or invalid domain specified");
                     Environment.Exit(0);
                 }
+                DomainTrustMapping TrustMapper;
+                DomainGroupEnumeration GroupEnumeration;
+                LocalAdminEnumeration AdminEnumeration;
+                SessionEnumeration SessionEnum;
 
-                if (options.CollMethod.Equals(Options.CollectionMethod.Default))
+                switch (options.CollMethod)
                 {
-                    DomainTrustMapping TrustMapper = new DomainTrustMapping();
-                    TrustMapper.GetDomainTrusts();
-                    DomainGroupEnumeration GroupEnumeration = new DomainGroupEnumeration();
-                    GroupEnumeration.EnumerateGroupMembership();
-                    LocalAdminEnumeration AdminEnumeration = new LocalAdminEnumeration();
-                    AdminEnumeration.EnumerateLocalAdmins();
-                    SessionEnumeration SessionEnum = new SessionEnumeration();
-                    SessionEnum.EnumerateSessions();
-                }
-                else if (options.CollMethod.Equals(Options.CollectionMethod.Trusts))
-                {
-                    DomainTrustMapping TrustMapper = new DomainTrustMapping();
-                    TrustMapper.GetDomainTrusts();
-                }else if (options.CollMethod.Equals(Options.CollectionMethod.LocalGroup))
-                {
-                    LocalAdminEnumeration AdminEnumeration = new LocalAdminEnumeration();
-                    AdminEnumeration.EnumerateLocalAdmins();
-                }else if (options.CollMethod.Equals(Options.CollectionMethod.Group))
-                {
-                    DomainGroupEnumeration GroupEnumeration = new DomainGroupEnumeration();
-                    GroupEnumeration.EnumerateGroupMembership();
-                }else if (options.CollMethod.Equals(Options.CollectionMethod.Session))
-                {
-                    SessionEnumeration SessionEnum = new SessionEnumeration();
-                    SessionEnum.EnumerateSessions();
-                }else if (options.CollMethod.Equals(Options.CollectionMethod.Stealth))
-                {
-                    SessionEnumeration SessionEnum = new SessionEnumeration();
-                    SessionEnum.EnumerateSessions();
+                    case CollectionMethod.Default:
+                        TrustMapper = new DomainTrustMapping();
+                        TrustMapper.GetDomainTrusts();
+                        GroupEnumeration = new DomainGroupEnumeration();
+                        GroupEnumeration.EnumerateGroupMembership();
+                        AdminEnumeration = new LocalAdminEnumeration();
+                        AdminEnumeration.EnumerateLocalAdmins();
+                        SessionEnum = new SessionEnumeration();
+                        SessionEnum.EnumerateSessions();
+                        break;
+                    case CollectionMethod.Trusts:
+                        TrustMapper = new DomainTrustMapping();
+                        TrustMapper.GetDomainTrusts();
+                        break;
+                    case CollectionMethod.ComputerOnly:
+                        AdminEnumeration = new LocalAdminEnumeration();
+                        AdminEnumeration.EnumerateLocalAdmins();
+                        SessionEnum = new SessionEnumeration();
+                        SessionEnum.EnumerateSessions();
+                        break;
+                    case CollectionMethod.Group:
+                        GroupEnumeration = new DomainGroupEnumeration();
+                        GroupEnumeration.EnumerateGroupMembership();
+                        break;
+                    case CollectionMethod.LoggedOn:
+                        SessionEnum = new SessionEnumeration();
+                        SessionEnum.EnumerateSessions();
+                        break;
+                    case CollectionMethod.LocalGroup:
+                        AdminEnumeration = new LocalAdminEnumeration();
+                        AdminEnumeration.EnumerateLocalAdmins();
+                        break;
+                    case CollectionMethod.Session:
+                        SessionEnum = new SessionEnumeration();
+                        SessionEnum.EnumerateSessions();
+                        break;
                 }
             }
             

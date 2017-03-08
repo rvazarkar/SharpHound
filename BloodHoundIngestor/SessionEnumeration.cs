@@ -61,7 +61,8 @@ namespace SharpHound
                 }
 
                 int lTotal = 0;
-                if (options.CollMethod.Equals(CollectionMethod.Stealth))
+
+                if (options.Stealth)
                 {
                     options.WriteVerbose("Gathering stealth targets");
                     ConcurrentDictionary<string, byte> paths = new ConcurrentDictionary<string, byte>();
@@ -395,10 +396,8 @@ namespace SharpHound
                 {
                     sessions.AddRange(GetNetLoggedOn(hostname));
                     sessions.AddRange(GetLocalLoggedOn(hostname));
-                }else if (c.Equals(CollectionMethod.Stealth))
-                {
-
-                }else
+                }
+                else
                 {
                     sessions.AddRange(GetNetSessions(hostname));
                 }

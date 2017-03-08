@@ -75,6 +75,7 @@ namespace SharpHound
                     
                 }
             }
+
             using (StreamWriter writer = new StreamWriter(options.GetFilePath("trusts.csv")))
             {
                 writer.WriteLine("SourceDomain,TargetDomain,TrustDirection,TrustType,Transitive");
@@ -83,6 +84,8 @@ namespace SharpHound
                     writer.WriteLine(d.ToCSV());
                 }
             }
+
+            Console.WriteLine("Domain Trust Enumeration Completed");
         }
 
         private TrustRelationshipInformationCollection GetNetDomainTrust(Domain Domain)

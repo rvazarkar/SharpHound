@@ -66,6 +66,8 @@ namespace SharpHound
                 WaitHandle.WaitAll(doneEvents);
                 Console.WriteLine(String.Format("Done local admin enumeration for domain {0} with {1} successful hosts out of {2} queried", DomainName, EnumerationData.live, EnumerationData.done));
             }
+            watch.Stop();
+            Console.WriteLine("Completed Local Admin Enumeration in " + watch.Elapsed);
             EnumerationData.EnumResults.Enqueue(null);
             write.Join();
         }

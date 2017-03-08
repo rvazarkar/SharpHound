@@ -63,7 +63,7 @@ namespace SharpHound
                 int lTotal = 0;
                 if (options.CollMethod.Equals(CollectionMethod.Stealth))
                 {
-                    options.WriteVerbose("Gathering file server paths");
+                    options.WriteVerbose("Gathering stealth targets");
                     ConcurrentDictionary<string, byte> paths = new ConcurrentDictionary<string, byte>();
                     //Get file servers first
                     DirectorySearcher searcher = Helpers.GetDomainSearcher(DomainName);
@@ -94,10 +94,6 @@ namespace SharpHound
 
                     searcher.Dispose();
 
-                    options.WriteVerbose("Gathering domain controllers");
-
-                    searcher = Helpers.GetDomainSearcher(DomainName);
-
                     foreach (string key in paths.Keys)
                     {
                         try
@@ -110,6 +106,16 @@ namespace SharpHound
 
                         }
                     }
+                    
+                    searcher = Helpers.GetDomainSearcher(DomainName);
+                    searcher.Filter = "(userAccountControl:1.2.840.113556.1.4.803:=8192)";
+                    searcher.PropertiesToLoad.Add("dnshostname");
+
+                    foreach (SearchResult r in searcher.FindAll())
+                    {
+                        EnumerationData.SearchResults.Enqueue(r.Properties["dnshostname"][0].ToString());
+                    }
+                    
                 }
                 else
                 {
@@ -130,6 +136,9 @@ namespace SharpHound
                 WaitHandle.WaitAll(doneEvents);
                 Console.WriteLine(String.Format("Done session enumeration for domain {0} with {1} hosts", DomainName, EnumerationData.done));
             }
+
+            watch.Stop();
+            Console.WriteLine("Completed Session Enumeration in " + watch.Elapsed);
             EnumerationData.EnumResults.Enqueue(null);
             write.Join();
         }

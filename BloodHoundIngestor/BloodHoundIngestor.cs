@@ -113,7 +113,10 @@ namespace BloodHoundIngestor
                     GroupEnumeration.EnumerateGroupMembership();
                     LocalAdminEnumeration AdminEnumeration = new LocalAdminEnumeration();
                     AdminEnumeration.EnumerateLocalAdmins();
-                }else if (options.CollMethod.Equals(Options.CollectionMethod.Trusts))
+                    SessionEnumeration SessionEnum = new SessionEnumeration();
+                    SessionEnum.EnumerateSessions();
+                }
+                else if (options.CollMethod.Equals(Options.CollectionMethod.Trusts))
                 {
                     DomainTrustMapping TrustMapper = new DomainTrustMapping();
                     TrustMapper.GetDomainTrusts();

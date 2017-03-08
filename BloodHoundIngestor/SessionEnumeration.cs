@@ -79,7 +79,7 @@ namespace BloodHoundIngestor
                 EnumerationData.SearchResults.Enqueue(null);
 
                 WaitHandle.WaitAll(doneEvents);
-                Console.WriteLine(String.Format("Done session enumeration for domain {0} with {1} succesful hosts out of {2} queried", DomainName, EnumerationData.live, EnumerationData.done));
+                Console.WriteLine(String.Format("Done session enumeration for domain {0} with {1} hosts", DomainName, EnumerationData.done));
             }
             EnumerationData.EnumResults.Enqueue(null);
             write.Join();
@@ -258,7 +258,6 @@ namespace BloodHoundIngestor
             public static ConcurrentQueue<SessionInfo> EnumResults = new ConcurrentQueue<SessionInfo>();
             public static ConcurrentDictionary<string, List<String>> GCMappings = new ConcurrentDictionary<string, List<String>>();
             public static ConcurrentDictionary<string, string> ResolveCache = new ConcurrentDictionary<string, string>();
-            public static int live = 0;
             public static int done = 0;
             public static int total = 0;
             public static string DomainName { get; set; }
@@ -266,7 +265,6 @@ namespace BloodHoundIngestor
             public static void Reset()
             {
                 SearchResults = new ConcurrentQueue<SearchResult>();
-                live = 0;
                 done = 0;
                 total = 0;
             }
@@ -348,7 +346,9 @@ namespace BloodHoundIngestor
                 {
                     sessions.AddRange(GetNetSessions(hostname));
                 }
-                
+
+                Interlocked.Increment(ref EnumerationData.done);
+
                 sessions.ForEach(EnumerationData.EnumResults.Enqueue);
             }
 
@@ -420,7 +420,7 @@ namespace BloodHoundIngestor
                                 Weight = 1
                             });
                             
-                            p = (IntPtr)((int)p + nStructSize);
+                            p = (IntPtr)(p.ToInt64() + nStructSize);
                         }
                     }
                 }
@@ -617,9 +617,6 @@ namespace BloodHoundIngestor
                         }
                     }
                 }
-
-                Interlocked.Increment(ref EnumerationData.done);
-                Interlocked.Increment(ref EnumerationData.live);
                 return toReturn;
             }
 

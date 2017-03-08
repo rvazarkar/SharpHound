@@ -64,7 +64,7 @@ namespace BloodHoundIngestor
                 EnumerationData.SearchResults.Enqueue(null);
 
                 WaitHandle.WaitAll(doneEvents);
-                Console.WriteLine(String.Format("Done local admin enumeration for domain {0} with {1} succesful hosts out of {2} queried", DomainName, EnumerationData.live, EnumerationData.done));
+                Console.WriteLine(String.Format("Done local admin enumeration for domain {0} with {1} successful hosts out of {2} queried", DomainName, EnumerationData.live, EnumerationData.done));
             }
             EnumerationData.EnumResults.Enqueue(null);
             write.Join();
@@ -175,6 +175,7 @@ namespace BloodHoundIngestor
             {
                 DirectoryEntry members = new DirectoryEntry(String.Format("WinNT://{0}/{1},group", Target, Group));
                 List<LocalAdminInfo> users = new List<LocalAdminInfo>();
+                string servername = Target.Split('.')[0].ToUpper();
                 foreach (object member in (System.Collections.IEnumerable)members.Invoke("Members"))
                 {
                     using (DirectoryEntry m = new DirectoryEntry(member))
@@ -193,10 +194,20 @@ namespace BloodHoundIngestor
                             {
                                 ObjectType = m.SchemaClassName;
                             }
+
+                            string domain = ObjectName.Split('\\')[0];
+                            string username = ObjectName.Split('\\')[1];
+
+                            if (domain.ToUpper().Equals(servername))
+                            {
+                                continue;
+                            }
+                            string membername = string.Format("{0}@{1}", username, _helpers.GetDomain(domain).Name);
+
                             users.Add(new LocalAdminInfo
                             {
                                 server = Target,
-                                objectname = ObjectName,
+                                objectname = membername,
                                 objecttype = ObjectType
                             });
                         }
@@ -208,11 +219,16 @@ namespace BloodHoundIngestor
 
             private List<LocalAdminInfo> LocalGroupAPI(string Target, string Group, string DomainSID)
             {
+                string servername = Target.Split('.')[0].ToUpper();
                 int QueryLevel = 2;
                 IntPtr PtrInfo = IntPtr.Zero;
                 int EntriesRead = 0;
                 int TotalRead = 0;
                 IntPtr ResumeHandle = IntPtr.Zero;
+                string MachineSID;
+
+                Type LMI2 = typeof(LOCALGROUP_MEMBERS_INFO_2);
+                int nStructSize = Marshal.SizeOf(LMI2);
 
                 List<LocalAdminInfo> users = new List<LocalAdminInfo>();
 
@@ -227,44 +243,62 @@ namespace BloodHoundIngestor
                     throw new APIFailedException();
                 }
 
+                long offset = PtrInfo.ToInt64();
                 if (EntriesRead > 0)
                 {
-                    LOCALGROUP_MEMBERS_INFO_2[] Members = new LOCALGROUP_MEMBERS_INFO_2[EntriesRead];
                     IntPtr iter = PtrInfo;
                     for (int i = 0; i < EntriesRead; i++)
                     {
-                        Members[i] = (LOCALGROUP_MEMBERS_INFO_2)Marshal.PtrToStructure(iter, typeof(LOCALGROUP_MEMBERS_INFO_2));
-                        iter = (IntPtr)((int)iter + Marshal.SizeOf(typeof(LOCALGROUP_MEMBERS_INFO_2)));
+                        LOCALGROUP_MEMBERS_INFO_2 data = (LOCALGROUP_MEMBERS_INFO_2)Marshal.PtrToStructure(iter, LMI2);
+                        iter = (IntPtr) (iter.ToInt64() + Marshal.SizeOf(LMI2));
                         string ObjectType;
-                        string ObjectName = Members[i].lgrmi2_domainandname;
+                        string ObjectName = data.lgrmi2_domainandname;
                         if (ObjectName.Split('\\')[1].Equals(""))
                         {
                             continue;
                         }
 
-                        if (ObjectName.EndsWith("$"))
+                        switch (data.lgrmi2_sidusage)
                         {
-                            ObjectType = "computer";
-                        }
-                        else
-                        {
-                            ObjectType = Members[i].lgrmi2_sidusage == 1 ? "user" : "group";
+                            case (SID_NAME_USE.SidTypeUser):
+                                ObjectType = "user";
+                                break;
+                            case (SID_NAME_USE.SidTypeComputer):
+                                ObjectType = "computer";
+                                break;
+                            case (SID_NAME_USE.SidTypeGroup):
+                                ObjectType = "group";
+                                break;
+                            default:
+                                ObjectType = "group";
+                                break;
                         }
 
                         string ObjectSID;
-                        ConvertSidToStringSid((IntPtr)Members[i].lgrmi2_sid, out ObjectSID);
+                        ConvertSidToStringSid(data.lgrmi2_sid, out ObjectSID);
+                        if (ObjectSID.EndsWith("-500") && !ObjectSID.StartsWith(DomainSID))
+                        {
+                            MachineSID = ObjectSID.Substring(0, ObjectSID.LastIndexOf("-"));
+                        }
+
+                        string domain = ObjectName.Split('\\')[0];
+
+                        if (domain.ToUpper().Equals(servername))
+                        {
+                            continue;
+                        }
+
+                        string username = ObjectName.Split('\\')[1];
+                        string membername = string.Format("{0}@{1}",username,_helpers.GetDomain(domain).Name);
                         users.Add(new LocalAdminInfo
                         {
                             server = Target,
-                            objectname = ObjectName,
+                            objectname = membername,
                             sid = ObjectSID,
                             objecttype = ObjectType
                         });
                     }
                     NetApiBufferFree(PtrInfo);
-
-                    string MachineSID = users.First(s => s.sid.EndsWith("-500") && s.sid.StartsWith(DomainSID)).sid;
-                    MachineSID = MachineSID.Substring(0, MachineSID.LastIndexOf("-"));
                     users = users.Where(element => element.sid.StartsWith(DomainSID)).ToList();
                 }
                 return users;
@@ -289,9 +323,23 @@ namespace BloodHoundIngestor
             [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
             public struct LOCALGROUP_MEMBERS_INFO_2
             {
-                public int lgrmi2_sid;
-                public int lgrmi2_sidusage;
+                public IntPtr lgrmi2_sid;
+                public SID_NAME_USE lgrmi2_sidusage;
+                [MarshalAs(UnmanagedType.LPWStr)]
                 public string lgrmi2_domainandname;
+            }
+
+            public enum SID_NAME_USE
+            {
+                SidTypeUser = 1,
+                SidTypeGroup,
+                SidTypeDomain,
+                SidTypeAlias,
+                SidTypeWellKnownGroup,
+                SidTypeDeletedAccount,
+                SidTypeInvalid,
+                SidTypeUnknown,
+                SidTypeComputer
             }
 
             [DllImport("advapi32", CharSet = CharSet.Auto, SetLastError = true)]

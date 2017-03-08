@@ -54,6 +54,12 @@ namespace BloodHoundIngestor
         [Option("SkipGCDeconfliction",DefaultValue =false,HelpText ="Skip Global Catalog Deconfliction for Sessions")]
         public bool SkipGCDeconfliction { get; set; }
 
+        [Option("SkipPing",DefaultValue =false,HelpText ="Skip ping checks on computer enumeration")]
+        public bool SkipPing { get; set; }
+
+        [Option("PingTimeout", DefaultValue = 750,HelpText ="Timeout in Milliseconds for Ping Checks")]
+        public int PingTimeout { get; set; }
+
         [ParserState]
         public IParserState LastParserState { get; set; }
 

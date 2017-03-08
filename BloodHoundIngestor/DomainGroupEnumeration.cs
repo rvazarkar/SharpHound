@@ -62,7 +62,7 @@ namespace BloodHoundIngestor
                 int lTotal = 0;
 
                 DirectorySearcher DomainSearcher = Helpers.GetDomainSearcher(DomainName);
-                DomainSearcher.Filter = "(memberof=*)";
+                DomainSearcher.Filter = "(|(memberof=*)(primarygroupid=*))";
 
                 DomainSearcher.PropertiesToLoad.AddRange(props);
 
@@ -235,9 +235,6 @@ namespace BloodHoundIngestor
                 {
                     SAMAccountType = SAT[0].ToString();
                 }
-
-                Console.WriteLine(result.Properties["samaccountname"][0].ToString());
-                Console.WriteLine(SAMAccountType);
 
                 string[] groups = new string[] { "268435456", "268435457", "536870912", "536870913" };
                 string[] computers = new string[] { "805306369" };

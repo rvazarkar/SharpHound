@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.DirectoryServices;
 using System.IO;
 using System.Linq;
+using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -90,8 +91,11 @@ namespace BloodHoundIngestor
 
         public class Enumerator : EnumeratorBase
         {
+            private Ping ping;
             public Enumerator(ManualResetEvent doneEvent) : base(doneEvent)
             {
+                Interlocked.Increment(ref EnumerationData.total);
+                ping = new Ping();
             }
 
             public override void ThreadCallback()
@@ -130,6 +134,17 @@ namespace BloodHoundIngestor
                 }else
                 {
                     return;
+                }
+
+                if (!_helpers.Options.SkipPing)
+                {
+                    PingReply reply = ping.Send(hostname, _helpers.Options.PingTimeout);
+
+                    if (reply.Status != IPStatus.Success)
+                    {
+                        Interlocked.Increment(ref EnumerationData.done);
+                        return;
+                    }
                 }
 
                 List<LocalAdminInfo> results = new List<LocalAdminInfo>();
@@ -228,7 +243,6 @@ namespace BloodHoundIngestor
                 string MachineSID;
 
                 Type LMI2 = typeof(LOCALGROUP_MEMBERS_INFO_2);
-                int nStructSize = Marshal.SizeOf(LMI2);
 
                 List<LocalAdminInfo> users = new List<LocalAdminInfo>();
 
@@ -242,8 +256,7 @@ namespace BloodHoundIngestor
                 {
                     throw new APIFailedException();
                 }
-
-                long offset = PtrInfo.ToInt64();
+                
                 if (EntriesRead > 0)
                 {
                     IntPtr iter = PtrInfo;

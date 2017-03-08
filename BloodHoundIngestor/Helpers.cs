@@ -188,7 +188,7 @@ namespace BloodHoundIngestor
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine(e);
+                    Console.WriteLine(String.Format("The specified domain {0} does not exist, could not be contacted, or there isn't an existing trust.", Domain));
                     DomainObject = null;
                 }
 

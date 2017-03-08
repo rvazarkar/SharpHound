@@ -17,6 +17,7 @@ using static BloodHoundIngestor.SessionEnumeration;
 using Microsoft.Win32;
 using System.Text.RegularExpressions;
 using static BloodHoundIngestor.Options;
+using System.Net.NetworkInformation;
 
 namespace BloodHoundIngestor
 {
@@ -323,15 +324,29 @@ namespace BloodHoundIngestor
         public class Enumerator : EnumeratorBase
         {
             private string currentUser;
+            private Ping ping;
 
             public Enumerator(ManualResetEvent done) : base(done)
             {
                 currentUser = Environment.UserName;
+                ping = new Ping();
             }
 
             public override void EnumerateResult(SearchResult result)
             {
                 string hostname = result.Properties["dnshostname"][0].ToString();
+
+                if (!_helpers.Options.SkipPing)
+                {
+                    PingReply reply = ping.Send(hostname, _helpers.Options.PingTimeout);
+
+                    if (reply.Status != IPStatus.Success)
+                    {
+                        Interlocked.Increment(ref EnumerationData.done);
+                        return;
+                    }
+                }
+
                 List<SessionInfo> sessions = new List<SessionInfo>();
 
                 CollectionMethod c = _helpers.Options.CollMethod;
@@ -490,29 +505,30 @@ namespace BloodHoundIngestor
             private List<SessionInfo> GetNetSessions(string server)
             {
                 List<SessionInfo> toReturn = new List<SessionInfo>();
-                IntPtr BufPtr;
-                int res = 0;
-                Int32 er = 0, tr = 0, resume = 0;
-                BufPtr = (IntPtr)Marshal.SizeOf(typeof(SESSION_INFO_10));
-                SESSION_INFO_10[] results = new SESSION_INFO_10[0];
-                do
-                {
-                    res = NetSessionEnum(server, null, null, 10, out BufPtr, -1, ref er, ref tr, ref resume);
-                    results = new SESSION_INFO_10[er];
-                    if (res == (int)NERR.ERROR_MORE_DATA || res == (int)NERR.NERR_Success)
-                    {
-                        Int32 p = BufPtr.ToInt32();
-                        for (int i = 0; i < er; i++)
-                        {
+                IntPtr PtrInfo = IntPtr.Zero;    
+                int val;
+                int EntriesRead = 0;
+                int TotalRead = 0;
+                IntPtr ResumeHandle = IntPtr.Zero;
 
-                            SESSION_INFO_10 si = (SESSION_INFO_10)Marshal.PtrToStructure(new IntPtr(p), typeof(SESSION_INFO_10));
-                            results[i] = si;
-                            p += Marshal.SizeOf(typeof(SESSION_INFO_10));
-                        }
+                Type si10 = typeof(SESSION_INFO_10);
+
+                val = NetSessionEnum(server, null, null, 10, out PtrInfo, -1, out EntriesRead, out TotalRead, ref ResumeHandle);
+
+
+                SESSION_INFO_10[] results = new SESSION_INFO_10[EntriesRead];
+
+                if (val == (int)NERR.NERR_Success)
+                {
+                    IntPtr iter = PtrInfo;
+                    for (int i = 0; i < EntriesRead; i++)
+                    {
+                        results[i] = (SESSION_INFO_10)Marshal.PtrToStructure(iter, si10);
+                        iter = (IntPtr)(iter.ToInt64() + Marshal.SizeOf(si10));
                     }
-                    Marshal.FreeHGlobal(BufPtr);
                 }
-                while (res == (int)NERR.ERROR_MORE_DATA);
+
+                NetApiBufferFree(PtrInfo);
                 
                 foreach (SESSION_INFO_10 x in results)
                 {
@@ -626,12 +642,12 @@ namespace BloodHoundIngestor
                 [In, MarshalAs(UnmanagedType.LPWStr)] string ServerName,
                 [In, MarshalAs(UnmanagedType.LPWStr)] string UncClientName,
                 [In, MarshalAs(UnmanagedType.LPWStr)] string UserName,
-                Int32 Level,
+                int Level,
                 out IntPtr bufptr,
                 int prefmaxlen,
-                ref Int32 entriesread,
-                ref Int32 totalentries,
-                ref Int32 resume_handle);
+                out int entriesread,
+                out int totalentries,
+                ref IntPtr resume_handle);
 
             [StructLayout(LayoutKind.Sequential)]
             public struct SESSION_INFO_10

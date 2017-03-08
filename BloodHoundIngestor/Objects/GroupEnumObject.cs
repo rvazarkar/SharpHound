@@ -4,7 +4,7 @@ using System.DirectoryServices;
 using System.Linq;
 using System.Text;
 
-namespace BloodHoundIngestor.Objects
+namespace SharpHound.Objects
 {
     class GroupEnumObject
     {

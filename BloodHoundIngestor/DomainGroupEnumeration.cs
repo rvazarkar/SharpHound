@@ -1,4 +1,4 @@
-﻿using BloodHoundIngestor.Objects;
+﻿using SharpHound.Objects;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -7,12 +7,9 @@ using System.DirectoryServices;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Runtime.InteropServices;
 using System.Threading;
-using System.Threading.Tasks;
-using static BloodHoundIngestor.DomainGroupEnumeration;
 
-namespace BloodHoundIngestor
+namespace SharpHound
 {
     class DomainGroupEnumeration
     {
@@ -197,7 +194,7 @@ namespace BloodHoundIngestor
                 _doneEvent.Set();
             }
 
-            public override void EnumerateResult(SearchResult result)
+            private void EnumerateResult(SearchResult result)
             {
                 string MemberDomain = null;
                 string DistinguishedName = result.Properties["distinguishedname"][0].ToString();
@@ -225,11 +222,12 @@ namespace BloodHoundIngestor
                 string SAMAccountType = null;
                 string SAMAccountName = null;
                 string AccountName = null;
+
                 ResultPropertyValueCollection SAT = result.Properties["samaccounttype"];
                 if (SAT.Count == 0)
                 {
-                    _options.WriteVerbose("Unknown Account Type");
-                    //options.WriteVerbose("Skipping " + DistinguishedName + " because accounttype is unknown");
+                    //_options.WriteVerbose("Unknown Account Type");
+                    _options.WriteVerbose("Skipping " + DistinguishedName + " because accounttype is unknown");
                 }
                 else
                 {

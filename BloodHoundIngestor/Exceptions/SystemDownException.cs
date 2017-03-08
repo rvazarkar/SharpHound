@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace BloodHoundIngestor.Exceptions
+namespace SharpHound.Exceptions
 {
     class SystemDownException : Exception
     {

@@ -1,4 +1,4 @@
-﻿using BloodHoundIngestor.Exceptions;
+﻿using SharpHound.Exceptions;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -6,12 +6,11 @@ using System.Diagnostics;
 using System.DirectoryServices;
 using System.IO;
 using System.Linq;
-using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading;
 
-namespace BloodHoundIngestor
+namespace SharpHound
 {
     class LocalAdminEnumeration
     {
@@ -91,11 +90,9 @@ namespace BloodHoundIngestor
 
         public class Enumerator : EnumeratorBase
         {
-            private Ping ping;
             public Enumerator(ManualResetEvent doneEvent) : base(doneEvent)
             {
                 Interlocked.Increment(ref EnumerationData.total);
-                ping = new Ping();
             }
 
             public override void ThreadCallback()
@@ -124,7 +121,7 @@ namespace BloodHoundIngestor
                 _doneEvent.Set();
             }
 
-            public override void EnumerateResult(SearchResult result)
+            private void EnumerateResult(SearchResult result)
             {
                 var y = result.Properties["dnshostname"];
                 string hostname;
@@ -136,15 +133,10 @@ namespace BloodHoundIngestor
                     return;
                 }
 
-                if (!_helpers.Options.SkipPing)
+                if (!_helpers.PingHost(hostname))
                 {
-                    PingReply reply = ping.Send(hostname, _helpers.Options.PingTimeout);
-
-                    if (reply.Status != IPStatus.Success)
-                    {
-                        Interlocked.Increment(ref EnumerationData.done);
-                        return;
-                    }
+                    Interlocked.Increment(ref EnumerationData.done);
+                    return;
                 }
 
                 List<LocalAdminInfo> results = new List<LocalAdminInfo>();

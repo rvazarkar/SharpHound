@@ -7,8 +7,8 @@
     <ProjectGuid>{7B9B5A4E-E03E-4FE0-A744-10323CFB0287}</ProjectGuid>
     <OutputType>Exe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>BloodHoundIngestor</RootNamespace>
-    <AssemblyName>BloodHoundIngestor</AssemblyName>
+    <RootNamespace>SharpHound</RootNamespace>
+    <AssemblyName>SharpHound</AssemblyName>
     <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <NuGetPackageImportStamp>
@@ -94,7 +94,7 @@
   <ItemGroup>
     <Compile Include="BaseClasses\EnumeratorBase.cs" />
     <Compile Include="BaseClasses\WriterBase.cs" />
-    <Compile Include="BloodHoundIngestor.cs" />
+    <Compile Include="SharpHound.cs" />
     <Compile Include="DomainGroupEnumeration.cs" />
     <Compile Include="Exceptions\APIFailedException.cs" />
     <Compile Include="Exceptions\SystemDownException.cs" />

@@ -2,10 +2,8 @@
 using System.Collections.Generic;
 using System.DirectoryServices.ActiveDirectory;
 using System.IO;
-using System.Linq;
-using System.Text;
 
-namespace BloodHoundIngestor
+namespace SharpHound
 {
     class DomainTrustMapping
     {

@@ -3,13 +3,10 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.DirectoryServices;
 using System.DirectoryServices.ActiveDirectory;
-using System.IO;
-using System.Linq;
-using System.Reflection;
+using System.Net.NetworkInformation;
 using System.Security.Principal;
-using System.Text;
 
-namespace BloodHoundIngestor
+namespace SharpHound
 {
     public class Helpers
     {
@@ -17,6 +14,7 @@ namespace BloodHoundIngestor
 
         private ConcurrentDictionary<string, Domain> DomainResolveCache;
         private ConcurrentDictionary<string, string> SidConversionCache;
+        private ConcurrentDictionary<string, bool> PingCache;
         private List<String> DomainList;
         private static Options options;
 
@@ -45,6 +43,7 @@ namespace BloodHoundIngestor
         {
             DomainResolveCache = new ConcurrentDictionary<string, Domain>();
             SidConversionCache = new ConcurrentDictionary<string, string>();
+            PingCache = new ConcurrentDictionary<string, bool>();
             DomainList = null;
             options = cli;
         }
@@ -186,7 +185,7 @@ namespace BloodHoundIngestor
                     DirectoryContext dc = new DirectoryContext(DirectoryContextType.Domain, Domain);
                     DomainObject = System.DirectoryServices.ActiveDirectory.Domain.GetDomain(dc);
                 }
-                catch (Exception e)
+                catch
                 {
                     Console.WriteLine(String.Format("The specified domain {0} does not exist, could not be contacted, or there isn't an existing trust.", Domain));
                     DomainObject = null;
@@ -430,6 +429,39 @@ namespace BloodHoundIngestor
                     return sid.ToString();
                 }
             }
+        }
+
+        /// <summary>
+        /// Checks if a system responds to ping. Returns true if it does.
+        /// </summary>
+        /// <param name="server"></param>
+        /// <returns></returns>
+        public bool PingHost(string server)
+        {
+            bool val;
+            if (options.SkipPing)
+            {
+                return true;
+            }
+
+            if (PingCache.TryGetValue(server, out val))
+            {
+                return val;
+            }
+            Ping ping = new Ping();
+
+            PingReply reply = ping.Send(server, options.PingTimeout);
+
+            if (reply.Status == IPStatus.Success)
+            {
+                val = true;
+            }else
+            {
+                val = false;
+            }
+
+            PingCache.TryAdd(server, val);
+            return val;
         }
     }
 }

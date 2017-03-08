@@ -1,14 +1,11 @@
 ﻿using CommandLine;
 using CommandLine.Text;
 using System;
-using System.Collections.Generic;
 using System.DirectoryServices.ActiveDirectory;
 using System.IO;
-using System.Linq;
 using System.Security.Permissions;
-using System.Text;
 
-namespace BloodHoundIngestor
+namespace SharpHound
 {
     public class Options
     {
@@ -135,6 +132,10 @@ namespace BloodHoundIngestor
                     DomainGroupEnumeration GroupEnumeration = new DomainGroupEnumeration();
                     GroupEnumeration.EnumerateGroupMembership();
                 }else if (options.CollMethod.Equals(Options.CollectionMethod.Session))
+                {
+                    SessionEnumeration SessionEnum = new SessionEnumeration();
+                    SessionEnum.EnumerateSessions();
+                }else if (options.CollMethod.Equals(Options.CollectionMethod.Stealth))
                 {
                     SessionEnumeration SessionEnum = new SessionEnumeration();
                     SessionEnum.EnumerateSessions();

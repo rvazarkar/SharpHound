@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
 VisualStudioVersion = 14.0.25420.1
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BloodHoundIngestor", "BloodHoundIngestor\BloodHoundIngestor.csproj", "{7B9B5A4E-E03E-4FE0-A744-10323CFB0287}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpHound", "BloodHoundIngestor\SharpHound.csproj", "{7B9B5A4E-E03E-4FE0-A744-10323CFB0287}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{7A774614-F352-46B2-8EB0-A00483A04CD1}"
 	ProjectSection(SolutionItems) = preProject

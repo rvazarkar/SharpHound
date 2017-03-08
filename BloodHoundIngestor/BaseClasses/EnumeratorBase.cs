@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 
-namespace BloodHoundIngestor
+namespace SharpHound
 {
     public abstract class EnumeratorBase
     {
@@ -21,6 +21,5 @@ namespace BloodHoundIngestor
         }
 
         public abstract void ThreadCallback();
-        public abstract void EnumerateResult(SearchResult result);
     }
 }

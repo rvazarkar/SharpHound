@@ -1,4 +1,5 @@
-﻿using BloodHoundIngestor.Objects;
+﻿using SharpHound.Objects;
+using Microsoft.Win32;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -7,19 +8,14 @@ using System.DirectoryServices;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
-using System.Text;
-using System.Threading;
-using System.Management;
-using static BloodHoundIngestor.SessionEnumeration;
-using Microsoft.Win32;
 using System.Text.RegularExpressions;
-using static BloodHoundIngestor.Options;
-using System.Net.NetworkInformation;
+using System.Threading;
+using System.Threading.Tasks;
+using static SharpHound.Options;
 
-namespace BloodHoundIngestor
+namespace SharpHound
 {
     class SessionEnumeration
     {
@@ -65,17 +61,69 @@ namespace BloodHoundIngestor
                 }
 
                 int lTotal = 0;
-
-                DirectorySearcher searcher = Helpers.GetDomainSearcher(DomainName);
-                searcher.Filter = "(sAMAccountType=805306369)";
-                searcher.PropertiesToLoad.Add("dnshostname");
-                foreach (SearchResult x in searcher.FindAll())
+                if (options.CollMethod.Equals(CollectionMethod.Stealth))
                 {
-                    EnumerationData.SearchResults.Enqueue(x);
-                    lTotal += 1;
-                }
-                searcher.Dispose();
+                    options.WriteVerbose("Gathering file server paths");
+                    ConcurrentDictionary<string, byte> paths = new ConcurrentDictionary<string, byte>();
+                    //Get file servers first
+                    DirectorySearcher searcher = Helpers.GetDomainSearcher(DomainName);
+                    searcher.Filter = "(&(samAccountType=805306368)(!(userAccountControl:1.2.840.113556.1.4.803:=2))(|(homedirectory=*)(scriptpath=*)(profilepath=*)))";
+                    searcher.PropertiesToLoad.AddRange(new string[] { "homedirectory", "scriptpath", "profilepath" });
 
+                    Parallel.ForEach(searcher.FindAll().Cast<SearchResult>().ToArray(), (result) =>
+                    {
+                        string home = result.Properties["homedirectory"].Count > 0 ? result.Properties["homedirectory"][0].ToString() : null;
+                        string script = result.Properties["scriptpath"].Count > 0 ? result.Properties["scriptpath"][0].ToString() : null;
+                        string profile = result.Properties["profilepath"].Count > 0 ? result.Properties["profilepath"][0].ToString() : null;
+
+                        if (home != null)
+                        {
+                            paths.TryAdd(home.ToLower().Split('\\')[2], default(byte));
+                        }
+
+                        if (script != null)
+                        {
+                            paths.TryAdd(script.ToLower().Split('\\')[2], default(byte));
+                        }
+
+                        if (profile != null)
+                        {
+                            paths.TryAdd(profile.ToLower().Split('\\')[2], default(byte));
+                        }
+                    });
+
+                    searcher.Dispose();
+
+                    options.WriteVerbose("Gathering domain controllers");
+
+                    searcher = Helpers.GetDomainSearcher(DomainName);
+
+                    foreach (string key in paths.Keys)
+                    {
+                        try
+                        {
+                            string resolved = System.Net.Dns.GetHostEntry(key).HostName;
+                            EnumerationData.SearchResults.Enqueue(resolved);
+                        }
+                        catch
+                        {
+
+                        }
+                    }
+                }
+                else
+                {
+                    DirectorySearcher searcher = Helpers.GetDomainSearcher(DomainName);
+                    searcher.Filter = "(sAMAccountType=805306369)";
+                    searcher.PropertiesToLoad.Add("dnshostname");
+                    foreach (SearchResult x in searcher.FindAll())
+                    {
+                        EnumerationData.SearchResults.Enqueue(x.Properties["dnshostname"][0].ToString());
+                        lTotal += 1;
+                    }
+                    searcher.Dispose();
+                }
+                
                 EnumerationData.total = lTotal;
                 EnumerationData.SearchResults.Enqueue(null);
 
@@ -84,13 +132,6 @@ namespace BloodHoundIngestor
             }
             EnumerationData.EnumResults.Enqueue(null);
             write.Join();
-        }
-
-        private void GetNetFileServer(string DomainName)
-        {
-            //DirectorySearcher searcher = Helpers.GetDomainSearcher(DomainName);
-            //searcher.Filter = "(&(samAccountType=805306368)(|(homedirectory=*)(scriptpath=*)(profilepath=*)))";
-            //searcher.PropertiesToLoad.AddRange(new string[] { "homedirectory", "scriptpath", "profilepath" });
         }
 
         private void GetGCMapping()
@@ -255,7 +296,7 @@ namespace BloodHoundIngestor
 
         public class EnumerationData
         {
-            public static ConcurrentQueue<SearchResult> SearchResults;
+            public static ConcurrentQueue<string> SearchResults;
             public static ConcurrentQueue<SessionInfo> EnumResults = new ConcurrentQueue<SessionInfo>();
             public static ConcurrentDictionary<string, List<String>> GCMappings = new ConcurrentDictionary<string, List<String>>();
             public static ConcurrentDictionary<string, string> ResolveCache = new ConcurrentDictionary<string, string>();
@@ -265,7 +306,7 @@ namespace BloodHoundIngestor
 
             public static void Reset()
             {
-                SearchResults = new ConcurrentQueue<SearchResult>();
+                SearchResults = new ConcurrentQueue<string>();
                 done = 0;
                 total = 0;
             }
@@ -324,27 +365,18 @@ namespace BloodHoundIngestor
         public class Enumerator : EnumeratorBase
         {
             private string currentUser;
-            private Ping ping;
 
             public Enumerator(ManualResetEvent done) : base(done)
             {
                 currentUser = Environment.UserName;
-                ping = new Ping();
             }
 
-            public override void EnumerateResult(SearchResult result)
+            private void EnumerateResult(string hostname)
             {
-                string hostname = result.Properties["dnshostname"][0].ToString();
-
-                if (!_helpers.Options.SkipPing)
+                if (!_helpers.PingHost(hostname))
                 {
-                    PingReply reply = ping.Send(hostname, _helpers.Options.PingTimeout);
-
-                    if (reply.Status != IPStatus.Success)
-                    {
-                        Interlocked.Increment(ref EnumerationData.done);
-                        return;
-                    }
+                    Interlocked.Increment(ref EnumerationData.done);
+                    return;
                 }
 
                 List<SessionInfo> sessions = new List<SessionInfo>();
@@ -371,7 +403,7 @@ namespace BloodHoundIngestor
             {
                 while (true)
                 {
-                    SearchResult result;
+                    string result;
                     if (EnumerationData.SearchResults.TryDequeue(out result))
                     {
                         if (result == null)

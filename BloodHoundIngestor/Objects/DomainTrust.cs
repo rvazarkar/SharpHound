@@ -4,7 +4,7 @@ using System.DirectoryServices.ActiveDirectory;
 using System.Linq;
 using System.Text;
 
-namespace BloodHoundIngestor
+namespace SharpHound
 {
     class DomainTrust
     {

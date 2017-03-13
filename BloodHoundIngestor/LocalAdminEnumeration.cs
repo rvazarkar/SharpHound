@@ -48,6 +48,14 @@ namespace SharpHound
                     consumer.Start();
                 }
 
+                System.Timers.Timer t = new System.Timers.Timer();
+                t.Elapsed += new System.Timers.ElapsedEventHandler(Timer_Tick);
+
+                t.Interval = options.Interval;
+                t.Enabled = true;
+
+                PrintStatus();
+
                 int lTotal = 0;
 
                 DirectorySearcher searcher = Helpers.GetDomainSearcher(DomainName);
@@ -64,12 +72,24 @@ namespace SharpHound
                 EnumerationData.SearchResults.Enqueue(null);
 
                 WaitHandle.WaitAll(doneEvents);
+                t.Dispose();
                 Console.WriteLine(String.Format("Done local admin enumeration for domain {0} with {1} successful hosts out of {2} queried", DomainName, EnumerationData.live, EnumerationData.done));
             }
             watch.Stop();
             Console.WriteLine("Completed Local Admin Enumeration in " + watch.Elapsed);
             EnumerationData.EnumResults.Enqueue(null);
             write.Join();
+        }
+
+        private void Timer_Tick(object sender, System.Timers.ElapsedEventArgs args)
+        {
+            PrintStatus();
+        }
+
+        private void PrintStatus()
+        {
+            string tot = EnumerationData.total == 0 ? "unknown" : EnumerationData.total.ToString();
+            Console.WriteLine(string.Format("Objects Enumerated: {0} out of {1}", EnumerationData.done, tot));
         }
 
         public class EnumerationData
@@ -90,11 +110,10 @@ namespace SharpHound
             }
         }
 
-        public class Enumerator : EnumeratorBase
+        private class Enumerator : EnumeratorBase
         {
             public Enumerator(ManualResetEvent doneEvent) : base(doneEvent)
             {
-                Interlocked.Increment(ref EnumerationData.total);
             }
 
             public override void ThreadCallback()
@@ -168,11 +187,6 @@ namespace SharpHound
                 Interlocked.Increment(ref EnumerationData.live);
                 Interlocked.Increment(ref EnumerationData.done);
 
-                if (EnumerationData.done % 100 == 0)
-                {
-                    string tot = EnumerationData.total == 0 ? "unknown" : EnumerationData.total.ToString();
-                    _options.WriteVerbose(string.Format("Systemes Enumerated: {0} out of {1}", EnumerationData.done, tot));
-                }
                 foreach (LocalAdminInfo r in results)
                 {
                     EnumerationData.EnumResults.Enqueue(r);
@@ -260,6 +274,11 @@ namespace SharpHound
                         iter = (IntPtr) (iter.ToInt64() + Marshal.SizeOf(LMI2));
                         string ObjectType;
                         string ObjectName = data.lgrmi2_domainandname;
+                        if (!ObjectName.Contains("\\"))
+                        {
+                            Console.WriteLine("Objectname " + ObjectName + " broke stuff");
+                            continue;
+                        }
                         if (ObjectName.Split('\\')[1].Equals(""))
                         {
                             continue;

@@ -60,6 +60,13 @@ namespace SharpHound
                     consumer.Start();
                 }
 
+                System.Timers.Timer t = new System.Timers.Timer();
+                t.Elapsed += new System.Timers.ElapsedEventHandler(Timer_Tick);
+
+                t.Interval = options.Interval;
+                t.Enabled = true;
+
+                PrintStatus();
                 int lTotal = 0;
 
                 if (options.Stealth)
@@ -135,6 +142,7 @@ namespace SharpHound
                 EnumerationData.SearchResults.Enqueue(null);
 
                 WaitHandle.WaitAll(doneEvents);
+                t.Dispose();
                 Console.WriteLine(String.Format("Done session enumeration for domain {0} with {1} hosts", DomainName, EnumerationData.done));
             }
 
@@ -142,6 +150,17 @@ namespace SharpHound
             Console.WriteLine("Completed Session Enumeration in " + watch.Elapsed);
             EnumerationData.EnumResults.Enqueue(null);
             write.Join();
+        }
+
+        private void Timer_Tick(object sender, System.Timers.ElapsedEventArgs args)
+        {
+            PrintStatus();
+        }
+
+        private void PrintStatus()
+        {
+            string tot = EnumerationData.total == 0 ? "unknown" : EnumerationData.total.ToString();
+            Console.WriteLine(string.Format("Objects Enumerated: {0} out of {1}", EnumerationData.done, tot));
         }
 
         private void GetGCMapping()
@@ -403,6 +422,12 @@ namespace SharpHound
                 }
 
                 Interlocked.Increment(ref EnumerationData.done);
+
+                if (EnumerationData.done % 100 == 0)
+                {
+                    string tot = EnumerationData.total == 0 ? "unknown" : EnumerationData.total.ToString();
+                    _options.WriteVerbose(string.Format("Systemes Enumerated: {0} out of {1}", EnumerationData.done, tot));
+                }
 
                 sessions.ForEach(EnumerationData.EnumResults.Enqueue);
             }

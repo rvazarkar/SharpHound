@@ -92,6 +92,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="ACLEnumeration.cs" />
     <Compile Include="BaseClasses\EnumeratorBase.cs" />
     <Compile Include="BaseClasses\WriterBase.cs" />
     <Compile Include="SharpHound.cs" />
@@ -111,6 +112,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="BloodHound.ps1" />
+    <None Include="bloodhound_acl.ps1" />
     <None Include="packages.config" />
     <None Include="PowerView.ps1" />
     <None Include="PowerView1.ps1" />

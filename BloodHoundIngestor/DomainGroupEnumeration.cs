@@ -48,6 +48,7 @@ namespace SharpHound
 
                 ManualResetEvent[] doneEvents = new ManualResetEvent[options.Threads];
 
+                options.WriteVerbose("Starting threads...");
                 for (int i = 0; i < options.Threads; i++)
                 {
                     doneEvents[i] = new ManualResetEvent(false);
@@ -55,8 +56,15 @@ namespace SharpHound
                     Thread consumer = new Thread(unused => e.ThreadCallback());
                     consumer.Start();
                 }
-
                 int lTotal = 0;
+
+                System.Timers.Timer t = new System.Timers.Timer();
+                t.Elapsed += new System.Timers.ElapsedEventHandler(Timer_Tick);
+
+                t.Interval = options.Interval;
+                t.Enabled = true;
+
+                PrintStatus();
 
                 DirectorySearcher DomainSearcher = Helpers.GetDomainSearcher(DomainName);
                 DomainSearcher.Filter = "(|(memberof=*)(primarygroupid=*))";
@@ -76,6 +84,7 @@ namespace SharpHound
 
                 WaitHandle.WaitAll(doneEvents);
                 Console.WriteLine(String.Format("Done group enumeration for domain {0} with {1} objects", DomainName, EnumerationData.count));
+                t.Dispose();
             }
 
             watch.Stop();
@@ -83,6 +92,17 @@ namespace SharpHound
 
             EnumerationData.EnumResults.Enqueue(null);
             write.Join();
+        }
+
+        private void Timer_Tick(object sender, System.Timers.ElapsedEventArgs args)
+        {
+            PrintStatus();
+        }
+
+        private void PrintStatus()
+        {
+            string tot = EnumerationData.total == 0 ? "unknown" : EnumerationData.total.ToString();
+            Console.WriteLine(string.Format("Objects Enumerated: {0} out of {1}", EnumerationData.count, tot));
         }
 
         public class EnumerationData
@@ -373,11 +393,6 @@ namespace SharpHound
                     }
                 }
                 Interlocked.Increment(ref EnumerationData.count);
-                if (EnumerationData.count % 1000 == 0)
-                {
-                    string tot = EnumerationData.total == 0 ? "unknown" : EnumerationData.total.ToString();
-                    _options.WriteVerbose(string.Format("Objects Enumerated: {0} out of {1}", EnumerationData.count, tot));
-                }
             }
 
             #region helpers

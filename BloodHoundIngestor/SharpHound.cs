@@ -60,6 +60,9 @@ namespace SharpHound
         [Option("Stealth", DefaultValue =false, HelpText ="Use stealth collection options")]
         public bool Stealth { get; set; }
 
+        [Option('i', "Interval", DefaultValue =30000,HelpText ="Interval in Milliseconds to display progress")]
+        public int Interval { get; set; }
+
         [ParserState]
         public IParserState LastParserState { get; set; }
 

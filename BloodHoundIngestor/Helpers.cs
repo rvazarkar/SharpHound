@@ -449,16 +449,24 @@ namespace SharpHound
                 return val;
             }
             Ping ping = new Ping();
-
-            PingReply reply = ping.Send(server, options.PingTimeout);
-
-            if (reply.Status == IPStatus.Success)
+            try
             {
-                val = true;
-            }else
+                PingReply reply = ping.Send(server, options.PingTimeout);
+
+                if (reply.Status == IPStatus.Success)
+                {
+                    val = true;
+                }
+                else
+                {
+                    val = false;
+                }
+            }
+            catch
             {
                 val = false;
             }
+            
 
             PingCache.TryAdd(server, val);
             return val;

@@ -43,6 +43,7 @@ namespace SharpHound
             {
                 Console.WriteLine("Starting ACL Enumeration for " + DomainName);
                 EnumerationData.Reset();
+                EnumerationData.DomainName = DomainName;
 
                 ManualResetEvent[] doneEvents = new ManualResetEvent[options.Threads];
 
@@ -65,7 +66,7 @@ namespace SharpHound
                 PrintStatus();
 
                 DirectorySearcher DomainSearcher = Helpers.GetDomainSearcher(DomainName);
-                DomainSearcher.Filter = "(|(samAccountType=805306368)(samAccountType=805306369)(samAccountType=268435456)(samAccountType=268435457)(samAccountType=536870912)(samAccountType=536870913))";
+                DomainSearcher.Filter = "(|(samAccountType=805306368)(samAccountType=805306369)(samAccountType=268435456)(samAccountType=268435457)(samAccountType=536870912)(samAccountType=536870913)(objectclass=domain))";
 
                 DomainSearcher.PropertiesToLoad.AddRange(props);
 
@@ -151,67 +152,236 @@ namespace SharpHound
                 try
                 {
                     RawAcl acls = new RawSecurityDescriptor(nt, 0).DiscretionaryAcl;
-                    foreach (ObjectAce r in acls)
+                    foreach (QualifiedAce r in acls)
                     {
-                        ActiveDirectoryRights right = (ActiveDirectoryRights)Enum.ToObject(typeof(ActiveDirectoryRights), r.AccessMask);
-                        string rs = right.ToString();
-                        string guid = r.ObjectAceType.ToString();
-                        Console.WriteLine(rs + " " + guid);
-
-                        if (
-                            ((rs.Equals("GenericWrite") || rs.Equals("GenericAll")) && guid.Equals("00000000-0000-0000-0000-000000000000")) ||
-                            ((rs.Equals("WriteDacl") || rs.Equals("WriteOwner"))) ||
-                            ((rs.Equals("ExtendedRight") && (guid.Equals("00000000-0000-0000-0000-000000000000") || guid.Equals("00299570-246d-11d0-a768-00aa006e0529")))) ||
-                            ((rs.Equals("WriteProperty") && ((guid.Equals("00000000-0000-0000-0000-000000000000") || guid.Equals("bf9679c0-0de6-11d0-a285-00aa003049e2") || guid.Equals("bf9679a8-0de6-11d0-a285-00aa003049e2")))))
-                            )
+                        string principal = r.SecurityIdentifier.ToString();
+                        MappedPrincipal nullcheck;
+                        if (EnumerationData.PrincipalMap.TryGetValue(principal, out nullcheck))
                         {
-                            string principal = r.SecurityIdentifier.ToString();
-                            string PrincipalSimpleName;
-                            string PrincipalObjectClass;
-                            string acetype;
-
-                            MatchCollection coll = EnumerationData.GenericRegex.Matches(rs);
-                            if (coll.Count == 0)
+                            if (nullcheck == null)
                             {
-                                switch (guid)
-                                {
-                                    case "00299570-246d-11d0-a768-00aa006e0529":
-                                        acetype = "User-Force-Change-Password";
-                                        break;
-                                    case "bf9679c0-0de6-11d0-a285-00aa003049e2":
-                                        acetype = "Member";
-                                        break;
-                                    case "bf9679a8-0de6-11d0-a285-00aa003049e2":
-                                        acetype = "Script-Path";
-                                        break;
-                                    default:
-                                        acetype = "All";
-                                        break;
-                                }
-                                Console.WriteLine(rs + " " + acetype);
-                            }
-                            
-                            MappedPrincipal resolved;
-                            if (EnumerationData.PrincipalMap.TryGetValue(principal, out resolved))
-                            {
-                                PrincipalSimpleName = resolved.SimpleName;
-                                PrincipalObjectClass = resolved.ObjectClass;
-                            }else if (MappedPrincipal.GetCommon(principal, out resolved))
-                            {
-                                PrincipalSimpleName = resolved.SimpleName;
-                                PrincipalObjectClass = resolved.ObjectClass;
-                                EnumerationData.PrincipalMap.TryAdd(principal, resolved);
-                            }else
-                            {
-                                SecurityIdentifier id = new SecurityIdentifier(principal);
-                                Console.WriteLine(id.Translate(typeof(NTAccount)).Value);
+                                continue;
                             }
                         }
+                        ActiveDirectoryRights right = (ActiveDirectoryRights)Enum.ToObject(typeof(ActiveDirectoryRights), r.AccessMask);
+                        string rs = right.ToString();
+                        string guid;
+                        if (r.GetType() == typeof(ObjectAce))
+                        {
+                            guid = ((ObjectAce)r).ObjectAceType.ToString();
+                        } else
+                        {
+                            guid = "";
+                        }
+
+                        bool cont = false;
+
+                        if (rs.Equals("GenericWrite") || rs.Equals("GenericAll"))
+                        {
+                            if (guid.Equals("00000000-0000-0000-0000-000000000000") || guid.Equals("")) {
+                                cont = true;
+                            }
+                        }
+
+                        if (rs.Equals("WriteDacl") || rs.Equals("WriteOwner"))
+                        {
+                            cont = true;
+                        }
+
+                        if (rs.Equals("ExtendedRight"))
+                        {
+                            if (guid.Equals("00000000-0000-0000-0000-000000000000") || guid.Equals("00299570-246d-11d0-a768-00aa006e0529"))
+                            {
+                                cont = true;
+                            }
+
+                            //DCSync
+                            if (guid.Equals("1131f6aa-9c07-11d1-f79f-00c04fc2dcd2") || guid.Equals("1131f6ad-9c07-11d1-f79f-00c04fc2dcd2"))
+                            {
+                                cont = true;
+                            }
+                        }
+
+                        if (rs.Equals("WriteProperty"))
+                        {
+                            if (guid.Equals("00000000-0000-0000-0000-000000000000") || guid.Equals("bf9679c0-0de6-11d0-a285-00aa003049e2") || guid.Equals("bf9679a8-0de6-11d0-a285-00aa003049e2"))
+                            {
+                                cont = true;
+                            }
+                        }
+
+                        if (!cont)
+                        {
+                            continue;
+                        }
+
+                        string PrincipalSimpleName;
+                        string PrincipalObjectClass = null;
+                        string acetype = null;
+
+                        MatchCollection coll = EnumerationData.GenericRegex.Matches(rs);
+                        if (coll.Count == 0)
+                        {
+                            switch (guid)
+                            {
+                                case "00299570-246d-11d0-a768-00aa006e0529":
+                                    acetype = "User-Force-Change-Password";
+                                    break;
+                                case "bf9679c0-0de6-11d0-a285-00aa003049e2":
+                                    acetype = "Member";
+                                    break;
+                                case "bf9679a8-0de6-11d0-a285-00aa003049e2":
+                                    acetype = "Script-Path";
+                                    break;
+                                case "1131f6aa-9c07-11d1-f79f-00c04fc2dcd2":
+                                    acetype = "DS-Replication-Get-Changes";
+                                    break;
+                                case "1131f6ad-9c07-11d1-f79f-00c04fc2dcd2":
+                                    acetype = "DS-Replication-Get-Changes-All";
+                                    break;
+                                default:
+                                    acetype = "All";
+                                    break;
+                            }
+                        }
+                            
+                        MappedPrincipal resolved;
+                        if (EnumerationData.PrincipalMap.TryGetValue(principal, out resolved))
+                        {
+                            PrincipalSimpleName = resolved.SimpleName;
+                            PrincipalObjectClass = resolved.ObjectClass;
+                        }else if (MappedPrincipal.GetCommon(principal, out resolved))
+                        {
+                            PrincipalSimpleName = resolved.SimpleName;
+                            PrincipalObjectClass = resolved.ObjectClass;
+                            EnumerationData.PrincipalMap.TryAdd(principal, resolved);
+                        }else
+                        {
+                            DirectorySearcher sidsearcher = _helpers.GetDomainSearcher(EnumerationData.DomainName);
+                            sidsearcher.PropertiesToLoad.AddRange(new string[] { "samaccountname", "distinguishedname", "dnshostname", "objectclass" });
+                            sidsearcher.Filter = String.Format("(objectsid={0})", principal);
+                            SearchResult PrincipalObject = sidsearcher.FindOne();
+                            sidsearcher.Dispose();
+
+                            if (PrincipalObject == null)
+                            {
+                                string path = new DirectoryEntry("LDAP://RootDSE").Properties["dnshostname"].Value.ToString();
+                                sidsearcher = _helpers.GetDomainSearcher(ADSPath: "GC://" + path);
+                                sidsearcher.PropertiesToLoad.AddRange(new string[] { "samaccountname", "distinguishedname", "dnshostname", "objectclass" });
+                                sidsearcher.Filter = String.Format("(objectsid={0})", principal);
+                                PrincipalObject = sidsearcher.FindOne();
+                                sidsearcher.Dispose();
+                            }
+
+                            if (PrincipalObject == null)
+                            {
+                                EnumerationData.PrincipalMap.TryAdd(principal, null);
+                                _options.WriteVerbose("SID Not Resolved: " + principal);
+                                continue;
+                            }else
+                            {
+                                List<string> classes = PrincipalObject.GetPropArray("objectclass");
+                                if (classes.Contains("computer"))
+                                {
+                                    PrincipalObjectClass = "COMPUTER";
+                                    PrincipalSimpleName = PrincipalObject.GetProp("dnshostname");
+                                }else
+                                {
+                                    string sam = PrincipalObject.GetProp("samaccountname");
+                                    string pdn = PrincipalObject.GetProp("distinguishedname");
+                                    if (sam == null || pdn == null)
+                                    {
+                                        EnumerationData.PrincipalMap.TryAdd(principal, null);
+                                        _options.WriteVerbose("SID Not Resolved: " + principal);
+                                        continue;
+                                    }
+
+                                    string pdomain = pdn.Substring(pdn.IndexOf("DC=")).Replace("DC=", "").Replace(",", ".");
+                                    PrincipalSimpleName = sam + "@" + pdomain;
+                                    if (classes.Contains("group"))
+                                    {
+                                        PrincipalObjectClass = "GROUP";
+                                    } else if (classes.Contains("user"))
+                                    {
+                                        PrincipalObjectClass = "USER";
+                                    }else
+                                    {
+                                        PrincipalObjectClass = "OTHER";
+                                    }
+
+                                    if (PrincipalObjectClass != null)
+                                    {
+                                        MappedPrincipal p = new MappedPrincipal(PrincipalSimpleName, PrincipalObjectClass);
+                                        EnumerationData.PrincipalMap.TryAdd(principal, p);
+                                    }else
+                                    {
+                                        EnumerationData.PrincipalMap.TryAdd(principal, null);
+                                        continue;
+                                    }
+                                }
+                            }
+                        }
+
+                        if (acetype == null)
+                        {
+                            acetype = "";
+                        }
+
+                        
+
+                        string ObjectType = null;
+                        string ObjectName;
+
+                        List<string> oclasses = result.GetPropArray("objectclass");
+                        if (oclasses.Contains("computer"))
+                        {
+                            ObjectType = "COMPUTER";
+                            ObjectName = result.GetProp("dnshostname");
+                        }else
+                        {
+                            ObjectName = result.GetProp("samaccountname");
+                            if (ObjectName == null)
+                            {
+                                ObjectName = result.GetProp("name");
+                            }
+                            string odn = result.GetProp("distinguishedname");
+                            string odomain = odn.Substring(odn.IndexOf("DC=")).Replace("DC=", "").Replace(",", ".");
+                            ObjectName = ObjectName + "@" + odomain;
+                            if (oclasses.Contains("group"))
+                            {
+                                ObjectType = "GROUP";
+                            }
+                            else if (oclasses.Contains("user"))
+                            {
+                                ObjectType = "USER";
+                            }else
+                            {
+                                ObjectType = "OTHER";
+                            }
+                        }
+
+                        if (ObjectType != null && ObjectName != null)
+                        {
+                            EnumerationData.EnumResults.Enqueue(new ACLInfo{
+                                ObjectName = ObjectName,
+                                ObjectType = ObjectType,
+                                AceType = acetype,
+                                Inherited = r.IsInherited,
+                                PrincipalName = PrincipalSimpleName,
+                                PrincipalType = PrincipalObjectClass,
+                                Qualifier = r.AceQualifier.ToString(),
+                                RightName = rs
+                            });
+                        }else
+                        {
+                            Console.WriteLine("AceType is " + acetype);
+                        }
+
                     }
                 }
-                catch
+                catch (Exception e)
                 {
-
+                    Console.WriteLine(e);
                 }
             }
         }
@@ -220,6 +390,7 @@ namespace SharpHound
         {
             public static int total = 0;
             public static int count = 0;
+            public static string DomainName { get; set; }
             public static ConcurrentQueue<SearchResult> SearchResults;
             public static ConcurrentQueue<ACLInfo> EnumResults = new ConcurrentQueue<ACLInfo>();
             public static ConcurrentDictionary<string, MappedPrincipal> PrincipalMap;
@@ -241,9 +412,9 @@ namespace SharpHound
             {
                 if (_options.URI == null)
                 {
-                    using (StreamWriter writer = new StreamWriter(_options.GetFilePath("group_memberships.csv")))
+                    using (StreamWriter writer = new StreamWriter(_options.GetFilePath("acls.csv")))
                     {
-                        writer.WriteLine("GroupName,AccountName,AccountType");
+                        writer.WriteLine("ObjectName,ObjectType,PrincipalName,PrincipalType,ActiveDirectoryRights,ACEType,AccessControlType,IsInherited");
                         while (true)
                         {
                             while (EnumerationData.EnumResults.IsEmpty)

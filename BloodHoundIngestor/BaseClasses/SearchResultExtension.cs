@@ -19,6 +19,24 @@ namespace ExtensionMethods
             }
         }
 
+        public static List<string> GetPropArray(this SearchResult result, string prop)
+        {
+            if (result.Properties[prop].Count == 0)
+            {
+                return null;
+            }
+            else
+            {
+                List<string> l = new List<string>();
+                foreach (var x in result.Properties[prop])
+                {
+                    l.Add(x.ToString());
+                }
+
+                return l;
+            }
+        }
+
         public static byte[] GetPropBytes(this SearchResult result, string prop)
         {
             if (result.Properties[prop].Count == 0)

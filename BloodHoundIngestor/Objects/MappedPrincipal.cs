@@ -128,7 +128,7 @@ namespace SharpHound.Objects
                     result = new MappedPrincipal("All Services", "GROUP");
                     break;
                 case "S-1-5-32-544":
-                    result = new MappedPrincipal("Administartors", "GROUP");
+                    result = new MappedPrincipal("Administrators", "GROUP");
                     break;
                 case "S-1-5-32-545":
                     result = new MappedPrincipal("Users", "GROUP");

@@ -135,7 +135,6 @@ namespace SharpHound
 
             public override void Write()
             {
-
                 if (_options.URI == null)
                 {
                     using (StreamWriter writer = new StreamWriter(_options.GetFilePath("group_memberships.csv")))
@@ -175,7 +174,6 @@ namespace SharpHound
                         }
                     }
                 }
-
             }
         }
 

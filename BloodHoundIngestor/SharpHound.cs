@@ -18,6 +18,7 @@ namespace SharpHound
             Session,
             LoggedOn,
             Trusts,
+            ACL,
             Default
         }
 
@@ -117,6 +118,7 @@ namespace SharpHound
                 DomainGroupEnumeration GroupEnumeration;
                 LocalAdminEnumeration AdminEnumeration;
                 SessionEnumeration SessionEnum;
+                ACLEnumeration ACLEnum;
 
                 switch (options.CollMethod)
                 {
@@ -155,6 +157,10 @@ namespace SharpHound
                     case CollectionMethod.Session:
                         SessionEnum = new SessionEnumeration();
                         SessionEnum.EnumerateSessions();
+                        break;
+                    case CollectionMethod.ACL:
+                        ACLEnum = new ACLEnumeration();
+                        ACLEnum.EnumerateACLs();
                         break;
                 }
             }

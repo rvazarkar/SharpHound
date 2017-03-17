@@ -299,10 +299,10 @@ namespace SharpHound
                     result = "Remote Interactive Logon";
                     break;
                 case "S-1-5-15":
-                    result = "This Organization ";
+                    result = "This Organization";
                     break;
                 case "S-1-5-17":
-                    result = "This Organization ";
+                    result = "This Organization";
                     break;
                 case "S-1-5-18":
                     result = "Local System";
@@ -314,7 +314,7 @@ namespace SharpHound
                     result = "NT Authority";
                     break;
                 case "S-1-5-80-0":
-                    result = "All Services ";
+                    result = "All Services";
                     break;
                 case "S-1-5-32-544":
                     result = "BUILTIN\\Administrators";

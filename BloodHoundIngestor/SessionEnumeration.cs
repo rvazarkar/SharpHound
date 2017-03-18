@@ -14,6 +14,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using static SharpHound.Options;
+using ExtensionMethods;
 
 namespace SharpHound
 {
@@ -80,9 +81,9 @@ namespace SharpHound
 
                     Parallel.ForEach(searcher.FindAll().Cast<SearchResult>().ToArray(), (result) =>
                     {
-                        string home = result.Properties["homedirectory"].Count > 0 ? result.Properties["homedirectory"][0].ToString() : null;
-                        string script = result.Properties["scriptpath"].Count > 0 ? result.Properties["scriptpath"][0].ToString() : null;
-                        string profile = result.Properties["profilepath"].Count > 0 ? result.Properties["profilepath"][0].ToString() : null;
+                        string home = result.GetProp("homedirectory");
+                        string script = result.GetProp("scriptpath");
+                        string profile = result.GetProp("profilepath");
 
                         if (home != null)
                         {
@@ -121,7 +122,7 @@ namespace SharpHound
 
                     foreach (SearchResult r in searcher.FindAll())
                     {
-                        EnumerationData.SearchResults.Enqueue(r.Properties["dnshostname"][0].ToString());
+                        EnumerationData.SearchResults.Enqueue(r.GetProp("dnshostname"));
                     }
                     
                 }
@@ -132,7 +133,7 @@ namespace SharpHound
                     searcher.PropertiesToLoad.Add("dnshostname");
                     foreach (SearchResult x in searcher.FindAll())
                     {
-                        EnumerationData.SearchResults.Enqueue(x.Properties["dnshostname"][0].ToString());
+                        EnumerationData.SearchResults.Enqueue(x.GetProp("dnshostname"));
                         lTotal += 1;
                     }
                     searcher.Dispose();
@@ -174,20 +175,9 @@ namespace SharpHound
 
             foreach (SearchResult result in GCSearcher.FindAll())
             {
-                if (result.Properties["samaccountname"].Count == 0)
-                {
-                    continue;
-                }
-
-                if (result.Properties["distinguishedname"].Count == 0)
-                {
-                    continue;
-                }
-
-                string username = result.Properties["samaccountname"][0].ToString().ToUpper();
-                string dn = result.Properties["distinguishedname"][0].ToString();
-
-                if (dn == "")
+                string username = result.GetProp("samaccountname");
+                string dn = result.GetProp("distinguishedname");
+                if (username == null || dn == null || dn == "")
                 {
                     continue;
                 }
@@ -199,8 +189,8 @@ namespace SharpHound
                 {
                     try
                     {
-                        string cn = result.Properties["cn"][0].ToString();
-                        byte[] sid = (byte[])result.Properties["objectsid"][0];
+                        string cn = result.GetProp("cn");
+                        byte[] sid = result.GetPropBytes("objectsid");
                         string usersid = new SecurityIdentifier(sid,0).Value;
 
                         MemberName = Helpers.ConvertSIDToName(usersid);
@@ -702,11 +692,11 @@ namespace SharpHound
             }
 
             #region pinvoke imports
-            [DllImport("netapi32.dll", SetLastError = true)]
+            [DllImport("NetAPI32.dll", SetLastError = true)]
             private static extern int NetSessionEnum(
-                [In, MarshalAs(UnmanagedType.LPWStr)] string ServerName,
-                [In, MarshalAs(UnmanagedType.LPWStr)] string UncClientName,
-                [In, MarshalAs(UnmanagedType.LPWStr)] string UserName,
+                [MarshalAs(UnmanagedType.LPWStr)] string ServerName,
+                [MarshalAs(UnmanagedType.LPWStr)] string UncClientName,
+                [MarshalAs(UnmanagedType.LPWStr)] string UserName,
                 int Level,
                 out IntPtr bufptr,
                 int prefmaxlen,

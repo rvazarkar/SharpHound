@@ -1,4 +1,5 @@
-﻿using SharpHound.Objects;
+﻿using ExtensionMethods;
+using SharpHound.Objects;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -215,14 +216,14 @@ namespace SharpHound
             private void EnumerateResult(SearchResult result)
             {
                 string MemberDomain = null;
-                string DistinguishedName = result.Properties["distinguishedname"][0].ToString();
+                string DistinguishedName = result.GetProp("distinguishedname");
                 string ObjectType = null;
 
                 if (DistinguishedName.Contains("ForeignSecurityPrincipals") && DistinguishedName.Contains("S-1-5-21"))
                 {
                     try
                     {
-                        string Translated = _helpers.ConvertSIDToName(result.Properties["cn"][0].ToString());
+                        string Translated = _helpers.ConvertSIDToName(result.GetProp("cn"));
                         string Final = ConvertADName(Translated, ADSTypes.ADS_NAME_TYPE_NT4, ADSTypes.ADS_NAME_TYPE_DN);
                         MemberDomain = Final.Split('/')[0];
                     }
@@ -241,15 +242,12 @@ namespace SharpHound
                 string SAMAccountName = null;
                 string AccountName = null;
 
-                ResultPropertyValueCollection SAT = result.Properties["samaccounttype"];
-                if (SAT.Count == 0)
+                SAMAccountType = result.GetProp("samaccounttype");
+
+                if (SAMAccountType == null)
                 {
-                    //_options.WriteVerbose("Unknown Account Type");
                     _options.WriteVerbose("Skipping " + DistinguishedName + " because accounttype is unknown");
-                }
-                else
-                {
-                    SAMAccountType = SAT[0].ToString();
+                    return;
                 }
 
                 string[] groups = new string[] { "268435456", "268435457", "536870912", "536870913" };
@@ -258,17 +256,13 @@ namespace SharpHound
                 if (groups.Contains(SAMAccountType))
                 {
                     ObjectType = "group";
-                    ResultPropertyValueCollection SAN = result.Properties["samaccountname"];
-                    if (SAN.Count > 0)
+                    SAMAccountName = result.GetProp("samaccountname");
+                    if (SAMAccountName == null)
                     {
-                        SAMAccountName = SAN[0].ToString();
-                    }
-                    else
-                    {
-                        SAMAccountName = _helpers.ConvertSIDToName(result.Properties["cn"][0].ToString());
+                        SAMAccountName = _helpers.ConvertSIDToName(result.GetProp("cn"));
                         if (SAMAccountName == null)
                         {
-                            SAMAccountName = result.Properties["cn"][0].ToString();
+                            SAMAccountName = result.GetProp("cn");
                         }
                     }
                     AccountName = String.Format("{0}@{1}", SAMAccountName, MemberDomain);
@@ -276,30 +270,18 @@ namespace SharpHound
                 else if (computers.Contains(SAMAccountType))
                 {
                     ObjectType = "computer";
-                    try
-                    {
-                        AccountName = result.Properties["dnshostname"][0].ToString();
-                    }
-                    catch
-                    {
-                        AccountName = null;
-                    }
-
+                    AccountName = result.GetProp("dnshostname");
                 }
                 else if (users.Contains(SAMAccountType))
                 {
                     ObjectType = "user";
-                    ResultPropertyValueCollection SAN = result.Properties["samaccountname"];
-                    if (SAN.Count > 0)
+                    SAMAccountName = result.GetProp("samaccountname");
+                    if (SAMAccountName == null)
                     {
-                        SAMAccountName = SAN[0].ToString();
-                    }
-                    else
-                    {
-                        SAMAccountName = _helpers.ConvertSIDToName(result.Properties["cn"][0].ToString());
+                        SAMAccountName = _helpers.ConvertSIDToName(result.GetProp("cn"));
                         if (SAMAccountName == null)
                         {
-                            SAMAccountName = result.Properties["cn"][0].ToString();
+                            SAMAccountName = result.GetProp("cn");
                         }
                     }
                     AccountName = String.Format("{0}@{1}", SAMAccountName, MemberDomain);
@@ -319,11 +301,11 @@ namespace SharpHound
                     return;
                 }
 
-                ResultPropertyValueCollection PGI = result.Properties["primarygroupid"];
-                string PrimaryGroup = null;
-                if (PGI.Count > 0)
+                string PrimaryGroup = result.GetProp("primarygroupid");
+
+                if (PrimaryGroup != null)
                 {
-                    string PrimaryGroupSID = EnumerationData.DomainSID + "-" + PGI[0].ToString();
+                    string PrimaryGroupSID = EnumerationData.DomainSID + "-" + PrimaryGroup;
                     string PrimaryGroupName = null;
                     if (EnumerationData.PrimaryGroups.ContainsKey(PrimaryGroupSID))
                     {
@@ -352,13 +334,12 @@ namespace SharpHound
                             EnumerationData.EnumResults.Enqueue(info);
                         }
                     }
-
                 }
 
-                ResultPropertyValueCollection MemberOf = result.Properties["memberof"];
-                if (MemberOf.Count > 0)
+                List<string> memberof = result.GetPropArray("memberof");
+                if (memberof != null)
                 {
-                    foreach (var dn in MemberOf)
+                    foreach (string dn in memberof)
                     {
                         string DNString = dn.ToString();
                         string GroupDomain = DNString.Substring(DNString.IndexOf("DC=")).Replace("DC=", "").Replace(",", ".");

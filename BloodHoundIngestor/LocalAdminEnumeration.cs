@@ -1,4 +1,5 @@
-﻿using SharpHound.Exceptions;
+﻿using ExtensionMethods;
+using SharpHound.Exceptions;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -145,11 +146,8 @@ namespace SharpHound
             private void EnumerateResult(SearchResult result)
             {
                 var y = result.Properties["dnshostname"];
-                string hostname;
-                if (y.Count > 0)
-                {
-                    hostname = y[0].ToString();
-                }else
+                string hostname = result.GetProp("dnshostname"); ;
+                if (hostname == null)
                 {
                     return;
                 }

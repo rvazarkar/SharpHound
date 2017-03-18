@@ -97,6 +97,7 @@
     <Compile Include="BaseClasses\SearchResultExtension.cs" />
     <Compile Include="BaseClasses\WriterBase.cs" />
     <Compile Include="Objects\ACLInfo.cs" />
+    <Compile Include="Objects\DCSync.cs" />
     <Compile Include="Objects\MappedPrincipal.cs" />
     <Compile Include="SharpHound.cs" />
     <Compile Include="DomainGroupEnumeration.cs" />

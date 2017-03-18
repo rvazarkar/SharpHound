@@ -81,6 +81,18 @@ namespace SharpHound
                 EnumerationData.SearchResults.Enqueue(null);
 
                 WaitHandle.WaitAll(doneEvents);
+
+                foreach (string key in EnumerationData.syncers.Keys)
+                {
+                    DCSync temp;
+                    if (EnumerationData.syncers.TryGetValue(key, out temp))
+                    {
+                        if (temp.CanDCSync())
+                        {
+                            EnumerationData.EnumResults.Enqueue(temp.GetOutputObj());
+                        }
+                    }
+                }
                 Console.WriteLine(String.Format("Done ACL enumeration for domain {0} with {1} objects", DomainName, EnumerationData.count));
                 t.Dispose();
             }
@@ -252,7 +264,8 @@ namespace SharpHound
                             PrincipalObjectClass = resolved.ObjectClass;
                         }else if (MappedPrincipal.GetCommon(principal, out resolved))
                         {
-                            PrincipalSimpleName = resolved.SimpleName;
+                            resolved.SimpleName = resolved.SimpleName + "@" + EnumerationData.DomainName;
+                            PrincipalSimpleName = resolved.SimpleName + "@" + EnumerationData.DomainName;
                             PrincipalObjectClass = resolved.ObjectClass;
                             EnumerationData.PrincipalMap.TryAdd(principal, resolved);
                         }else
@@ -320,14 +333,7 @@ namespace SharpHound
                                     }
                                 }
                             }
-                        }
-
-                        if (acetype == null)
-                        {
-                            acetype = "";
-                        }
-
-                        
+                        }                        
 
                         string ObjectType = null;
                         string ObjectName;
@@ -360,6 +366,31 @@ namespace SharpHound
                             }
                         }
 
+                        if (acetype != null && (acetype.Equals("DS-Replication-Get-Changes-All") || acetype.Equals("DS-Replication-Get-Changes")))
+                        {
+                            DCSync temp;
+                            EnumerationData.syncers.TryGetValue(PrincipalSimpleName, out temp);
+                            
+                            if (temp == null)
+                            {
+                                temp = new DCSync();
+                                temp.Domain = ObjectName;
+                                temp.PrincipalName = PrincipalSimpleName;
+                                temp.PrincipalType = PrincipalObjectClass;
+                            }
+
+                            if (acetype.Contains("-All"))
+                            {
+                                temp.GetChangesAll = true;
+                            }else
+                            {
+                                temp.GetChanges = true;
+                            }
+
+                            EnumerationData.syncers.AddOrUpdate(PrincipalSimpleName, temp, (key, oldVal) => temp);
+                            continue;
+                        }
+
                         if (ObjectType != null && ObjectName != null)
                         {
                             EnumerationData.EnumResults.Enqueue(new ACLInfo{
@@ -372,9 +403,6 @@ namespace SharpHound
                                 Qualifier = r.AceQualifier.ToString(),
                                 RightName = rs
                             });
-                        }else
-                        {
-                            Console.WriteLine("AceType is " + acetype);
                         }
 
                     }
@@ -396,11 +424,13 @@ namespace SharpHound
             public static ConcurrentDictionary<string, MappedPrincipal> PrincipalMap;
             public static string[] GenericRights = new string[] { "GenericAll", "GenericWrite", "WriteOWner", "WriteDacl" };
             public static Regex GenericRegex = new Regex("GenericAll|GenericWrite|WriteOwner|WriteDacl");
+            public static ConcurrentDictionary<string, DCSync> syncers;
 
             public static void Reset()
             {
                 SearchResults = new ConcurrentQueue<SearchResult>();
                 PrincipalMap = new ConcurrentDictionary<string, MappedPrincipal>();
+                syncers = new ConcurrentDictionary<string, DCSync>();
                 count = 0;
                 total = 0;
             }

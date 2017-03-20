@@ -459,47 +459,39 @@ namespace SharpHound
                 int ResumeHandle = 0;
 
                 Type tWui1 = typeof(WKSTA_USER_INFO_1);
-                int nStructSize = Marshal.SizeOf(tWui1);
 
                 int result = NetWkstaUserEnum(server, QueryLevel, out info, -1, out EntriesRead, out TotalRead, ref ResumeHandle);
                 long offset = info.ToInt64();
 
                 if (result == 0 || result == 234)
                 {
-                    if (EntriesRead > 0)
+                    IntPtr iter = info;
+                    for (int i = 0; i < EntriesRead; i++)
                     {
-                        IntPtr p = info;
-                        for (int i = 0; i < EntriesRead; i++)
-                        {
-                            WKSTA_USER_INFO_1 data = (WKSTA_USER_INFO_1)Marshal.PtrToStructure(p, tWui1);
-                            string username = data.wkui1_username;
-                            string domain = data.wkui1_logon_domain;
-                            string servername = server.Split('.')[0].ToUpper();
+                        WKSTA_USER_INFO_1 data = (WKSTA_USER_INFO_1)Marshal.PtrToStructure(iter, tWui1);
+                        iter = (IntPtr)(iter.ToInt64() + Marshal.SizeOf(tWui1));
+                        string username = data.wkui1_username;
+                        string domain = data.wkui1_logon_domain;
+                        string servername = server.Split('.')[0].ToUpper();
 
-                            if (username.Trim() == "" || username.EndsWith("$") || servername.ToUpper().Equals(domain))
-                            {
-                                continue;
-                            }
-                            
-                            string MemberName = string.Format("{0}@{1}", username, _helpers.GetDomain(domain).Name);
-                            
-                            results.Add(new SessionInfo()
-                            {
-                                ComputerName = server,
-                                UserName = MemberName,
-                                Weight = 1
-                            });
-                            
-                            p = (IntPtr)(p.ToInt64() + nStructSize);
+                        if (username.Trim() == "" || username.EndsWith("$") || servername.ToUpper().Equals(domain))
+                        {
+                            continue;
                         }
+                            
+                        string MemberName = string.Format("{0}@{1}", username, _helpers.GetDomain(domain).Name);
+                            
+                        results.Add(new SessionInfo()
+                        {
+                            ComputerName = server,
+                            UserName = MemberName,
+                            Weight = 1
+                        });
                     }
                 }
-
-                if (info != IntPtr.Zero)
-                {
-                    NetApiBufferFree(info);
-                }
-
+                
+                NetApiBufferFree(info);
+                
                 return results;
             }
 

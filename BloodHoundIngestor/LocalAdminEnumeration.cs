@@ -10,6 +10,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace SharpHound
 {
@@ -109,6 +110,42 @@ namespace SharpHound
                 done = 0;
                 total = 0;
             }
+        }
+
+        private void EunmerateGPOAdmin(string DomainName)
+        {
+            string targetsid = "S-1-5-32-544";
+
+            DirectorySearcher gposearcher = Helpers.GetDomainSearcher(DomainName);
+            gposearcher.Filter = "(&(objectCategory=groupPolicyContainer)(name=*)(gpcfilesyspath=*))";
+            gposearcher.PropertiesToLoad.AddRange(new string[] { "displayname", "name", "gpcfilesyspath" });
+
+            Parallel.ForEach(gposearcher.FindAll().Cast<SearchResult>().ToArray(), (result) =>
+            {
+                string display = result.GetProp("displayname");
+                string name = result.GetProp("name");
+                string path  = result.GetProp("gpcfilesystem");
+
+                if (display == null || name == null || path == null)
+                {
+                    return;
+                }
+
+                string template = String.Format("{0}\\{1}", path, "MACHINE\\Microsoft\\Windows NT\\SecEdit\\GptTmpl.inf");
+
+                using (StreamReader sr = new StreamReader(template))
+                {
+                    string line;
+                    while ((line = sr.ReadLine()) != null)
+                    {
+                        Match section = Regex.Match(line, @"^\[(.+)\]");
+                        if (section.Success)
+                        {
+
+                        }
+                    }
+                }
+            });
         }
 
         private class Enumerator : EnumeratorBase
@@ -274,7 +311,6 @@ namespace SharpHound
                         string ObjectName = data.lgrmi2_domainandname;
                         if (!ObjectName.Contains("\\"))
                         {
-                            Console.WriteLine("Objectname " + ObjectName + " broke stuff");
                             continue;
                         }
                         if (ObjectName.Split('\\')[1].Equals(""))
@@ -308,6 +344,11 @@ namespace SharpHound
                         string domain = ObjectName.Split('\\')[0];
 
                         if (domain.ToUpper().Equals(servername))
+                        {
+                            continue;
+                        }
+
+                        if (domain.ToUpper().Equals("NT AUTHORITY"))
                         {
                             continue;
                         }
@@ -386,7 +427,7 @@ namespace SharpHound
                 {
                     using (StreamWriter writer = new StreamWriter(_options.GetFilePath("local_admins.csv")))
                     {
-                        writer.WriteLine("GroupName,AccountName,AccountType");
+                        writer.WriteLine("ComputerName, AccountName, AccountType");
                         while (true)
                         {
                             while (EnumerationData.EnumResults.IsEmpty)

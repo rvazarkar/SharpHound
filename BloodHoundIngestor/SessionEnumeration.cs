@@ -416,7 +416,7 @@ namespace SharpHound
                 if (EnumerationData.done % 100 == 0)
                 {
                     string tot = EnumerationData.total == 0 ? "unknown" : EnumerationData.total.ToString();
-                    _options.WriteVerbose(string.Format("Systemes Enumerated: {0} out of {1}", EnumerationData.done, tot));
+                    _options.WriteVerbose(string.Format("Systems Enumerated: {0} out of {1}", EnumerationData.done, tot));
                 }
 
                 sessions.ForEach(EnumerationData.EnumResults.Enqueue);

@@ -4,7 +4,9 @@ using System.Collections.Generic;
 using System.DirectoryServices;
 using System.DirectoryServices.ActiveDirectory;
 using System.Net.NetworkInformation;
+using System.Runtime.InteropServices;
 using System.Security.Principal;
+using System.Text;
 
 namespace SharpHound
 {
@@ -64,7 +66,7 @@ namespace SharpHound
             }
 
             string SearchString;
-            
+
             if (ADSPath == null)
             {
                 string DomainName = TargetDomain.Name;
@@ -80,11 +82,12 @@ namespace SharpHound
                     string DomainDN = DomainName.Replace(".", ",DC=");
                     SearchString += "DC=" + DomainDN;
                 }
-            }else
+            }
+            else
             {
                 SearchString = ADSPath;
             }
-            
+
 
             options.WriteVerbose(String.Format("[GetDomainSearcher] Search String: {0}", SearchString));
 
@@ -151,7 +154,6 @@ namespace SharpHound
             DomainList = domains;
 
             return domains;
-
         }
 
         public Domain GetDomain(string Domain = null)
@@ -190,8 +192,8 @@ namespace SharpHound
                     Console.WriteLine(String.Format("The specified domain {0} does not exist, could not be contacted, or there isn't an existing trust.", Domain));
                     DomainObject = null;
                 }
-
             }
+
             if (Domain == null)
             {
                 DomainResolveCache.TryAdd("UNIQUENULLOBJECT", DomainObject);
@@ -211,7 +213,7 @@ namespace SharpHound
             {
                 return result;
             }
-            
+
             switch (TrimmedCN)
             {
                 case "S-1-0":
@@ -431,6 +433,11 @@ namespace SharpHound
             }
         }
 
+        public void GetOUForGPO(string GPO, string Domain)
+        {
+
+        }
+
         /// <summary>
         /// Checks if a system responds to ping. Returns true if it does.
         /// </summary>
@@ -466,7 +473,7 @@ namespace SharpHound
             {
                 val = false;
             }
-            
+
 
             PingCache.TryAdd(server, val);
             return val;

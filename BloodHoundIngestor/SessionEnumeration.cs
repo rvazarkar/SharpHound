@@ -161,7 +161,7 @@ namespace SharpHound
         private void PrintStatus()
         {
             string tot = EnumerationData.total == 0 ? "unknown" : EnumerationData.total.ToString();
-            Console.WriteLine(string.Format("Objects Enumerated: {0} out of {1}", EnumerationData.done, tot));
+            Console.WriteLine(string.Format("Systems Enumerated: {0} out of {1}", EnumerationData.done, tot));
         }
 
         private void GetGCMapping()
@@ -412,12 +412,6 @@ namespace SharpHound
                 }
 
                 Interlocked.Increment(ref EnumerationData.done);
-
-                if (EnumerationData.done % 100 == 0)
-                {
-                    string tot = EnumerationData.total == 0 ? "unknown" : EnumerationData.total.ToString();
-                    _options.WriteVerbose(string.Format("Systems Enumerated: {0} out of {1}", EnumerationData.done, tot));
-                }
 
                 sessions.ForEach(EnumerationData.EnumResults.Enqueue);
             }

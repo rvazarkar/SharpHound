@@ -40,41 +40,47 @@ namespace SharpHound
                 EnumerationData.Reset();
                 EnumerationData.DomainSID = Helpers.GetDomainSid(DomainName);
 
-                ManualResetEvent[] doneEvents = new ManualResetEvent[options.Threads];
-
-                for (int i = 0; i < options.Threads; i++)
+                if (options.Stealth)
                 {
-                    doneEvents[i] = new ManualResetEvent(false);
-                    Enumerator e = new Enumerator(doneEvents[i]);
-                    Thread consumer = new Thread(unused => e.ThreadCallback());
-                    consumer.Start();
-                }
-
-                System.Timers.Timer t = new System.Timers.Timer();
-                t.Elapsed += new System.Timers.ElapsedEventHandler(Timer_Tick);
-
-                t.Interval = options.Interval;
-                t.Enabled = true;
-
-                PrintStatus();
-
-                int lTotal = 0;
-
-                DirectorySearcher searcher = Helpers.GetDomainSearcher(DomainName);
-                searcher.Filter = "(sAMAccountType=805306369)";
-                searcher.PropertiesToLoad.Add("dnshostname");
-                foreach (SearchResult x in searcher.FindAll())
+                    EnumerateGPOAdmin(DomainName);
+                }else
                 {
-                    EnumerationData.SearchResults.Enqueue(x);
-                    lTotal += 1;
+                    ManualResetEvent[] doneEvents = new ManualResetEvent[options.Threads];
+                    for (int i = 0; i < options.Threads; i++)
+                    {
+                        doneEvents[i] = new ManualResetEvent(false);
+                        Enumerator e = new Enumerator(doneEvents[i]);
+                        Thread consumer = new Thread(unused => e.ThreadCallback());
+                        consumer.Start();
+                    }
+
+                    System.Timers.Timer t = new System.Timers.Timer();
+                    t.Elapsed += new System.Timers.ElapsedEventHandler(Timer_Tick);
+
+                    t.Interval = options.Interval;
+                    t.Enabled = true;
+
+                    PrintStatus();
+
+                    int lTotal = 0;
+
+                    DirectorySearcher searcher = Helpers.GetDomainSearcher(DomainName);
+                    searcher.Filter = "(sAMAccountType=805306369)";
+                    searcher.PropertiesToLoad.Add("dnshostname");
+                    foreach (SearchResult x in searcher.FindAll())
+                    {
+                        EnumerationData.SearchResults.Enqueue(x);
+                        lTotal += 1;
+                    }
+                    searcher.Dispose();
+
+                    EnumerationData.total = lTotal;
+                    EnumerationData.SearchResults.Enqueue(null);
+
+                    WaitHandle.WaitAll(doneEvents);
+                    t.Dispose();
                 }
-                searcher.Dispose();
-
-                EnumerationData.total = lTotal;
-                EnumerationData.SearchResults.Enqueue(null);
-
-                WaitHandle.WaitAll(doneEvents);
-                t.Dispose();
+                
                 Console.WriteLine(String.Format("Done local admin enumeration for domain {0} with {1} successful hosts out of {2} queried", DomainName, EnumerationData.live, EnumerationData.done));
             }
             watch.Stop();
@@ -112,19 +118,23 @@ namespace SharpHound
             }
         }
 
-        private void EunmerateGPOAdmin(string DomainName)
+        private void EnumerateGPOAdmin(string DomainName)
         {
-            string targetsid = "S-1-5-32-544";
+            string targetsid = "S-1-5-32-544__Members";
+
+            Console.WriteLine("Starting GPO Correlation");
 
             DirectorySearcher gposearcher = Helpers.GetDomainSearcher(DomainName);
             gposearcher.Filter = "(&(objectCategory=groupPolicyContainer)(name=*)(gpcfilesyspath=*))";
             gposearcher.PropertiesToLoad.AddRange(new string[] { "displayname", "name", "gpcfilesyspath" });
 
+            ConcurrentQueue<string> INIResults = new ConcurrentQueue<string>();
+
             Parallel.ForEach(gposearcher.FindAll().Cast<SearchResult>().ToArray(), (result) =>
             {
                 string display = result.GetProp("displayname");
                 string name = result.GetProp("name");
-                string path  = result.GetProp("gpcfilesystem");
+                string path  = result.GetProp("gpcfilesyspath");
 
                 if (display == null || name == null || path == null)
                 {
@@ -132,20 +142,86 @@ namespace SharpHound
                 }
 
                 string template = String.Format("{0}\\{1}", path, "MACHINE\\Microsoft\\Windows NT\\SecEdit\\GptTmpl.inf");
-
+                
                 using (StreamReader sr = new StreamReader(template))
                 {
-                    string line;
+                    string line = String.Empty;
+                    string currsection = String.Empty;
                     while ((line = sr.ReadLine()) != null)
                     {
                         Match section = Regex.Match(line, @"^\[(.+)\]");
                         if (section.Success)
                         {
+                            currsection = section.Captures[0].Value.Trim();
+                        }
+                        
+                        if (!currsection.Equals("[Group Membership]"))
+                        {
+                            continue;
+                        }
 
+                        Match key = Regex.Match(line, @"(.+?)\s*=(.*)");
+                        if (key.Success)
+                        {
+                            string n = key.Groups[1].Value;
+                            string v = key.Groups[2].Value;
+                            if (n.Contains(targetsid))
+                            {
+                                v = v.Trim();
+                                List<String> members = v.Split(',').ToList();
+                                List<string> resolved = new List<string>();
+                                for (int i = 0; i < members.Count; i++)
+                                {
+                                    string m = members[i];
+                                    m = m.Trim('*');
+
+                                    string sid;
+                                    if (!m.StartsWith("S-1-"))
+                                    {
+                                        try
+                                        {
+                                            sid = new System.Security.Principal.NTAccount(DomainName, m).Translate(typeof(System.Security.Principal.SecurityIdentifier)).Value;
+                                        }
+                                        catch
+                                        {
+                                            sid = null;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        sid = m;
+                                    }
+                                    if (sid == null)
+                                    {
+                                        continue;
+                                    }
+                                    string converted = Helpers.ConvertSIDToName(sid);
+                                    if (converted != null)
+                                    {
+                                        resolved.Add(converted);
+                                    }
+                                }
+                                DirectorySearcher OUSearch = Helpers.GetDomainSearcher(DomainName);
+                                
+                                OUSearch.Filter = string.Format("(&(objectCategory=organizationalUnit)(name=*)(gplink=*{0}*))", name);
+                                foreach (SearchResult r in OUSearch.FindAll())
+                                {
+                                    DirectorySearcher compsearcher = Helpers.GetDomainSearcher(DomainName, ADSPath: r.GetProp("adspath"));
+                                    foreach (SearchResult ra in compsearcher.FindAll())
+                                    {
+                                        EnumerationData.EnumResults.Enqueue(new LocalAdminInfo
+                                        {
+                                            objectname = conver
+                                        })
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             });
+
+            Console.WriteLine("Done GPO Correlation");
         }
 
         private class Enumerator : EnumeratorBase
@@ -277,13 +353,12 @@ namespace SharpHound
 
             private List<LocalAdminInfo> LocalGroupAPI(string Target, string Group, string DomainSID)
             {
-                string servername = Target.Split('.')[0].ToUpper();
                 int QueryLevel = 2;
                 IntPtr PtrInfo = IntPtr.Zero;
                 int EntriesRead = 0;
                 int TotalRead = 0;
                 IntPtr ResumeHandle = IntPtr.Zero;
-                string MachineSID;
+                string MachineSID = "DUMMYSTRING";
 
                 Type LMI2 = typeof(LOCALGROUP_MEMBERS_INFO_2);
 
@@ -303,10 +378,29 @@ namespace SharpHound
                 if (EntriesRead > 0)
                 {
                     IntPtr iter = PtrInfo;
+                    List<LOCALGROUP_MEMBERS_INFO_2> list = new List<LOCALGROUP_MEMBERS_INFO_2>();
                     for (int i = 0; i < EntriesRead; i++)
                     {
                         LOCALGROUP_MEMBERS_INFO_2 data = (LOCALGROUP_MEMBERS_INFO_2)Marshal.PtrToStructure(iter, LMI2);
                         iter = (IntPtr) (iter.ToInt64() + Marshal.SizeOf(LMI2));
+                        list.Add(data);
+                    }
+
+                    NetApiBufferFree(PtrInfo);
+
+                    foreach (LOCALGROUP_MEMBERS_INFO_2 data in list)
+                    {
+                        string s;
+                        ConvertSidToStringSid(data.lgrmi2_sid, out s);
+                        if (s.EndsWith("-500") && !(s.StartsWith(EnumerationData.DomainSID)))
+                        {
+                            MachineSID = s.Substring(0, s.LastIndexOf("-"));
+                            break;
+                        }
+                    }
+
+                    foreach (LOCALGROUP_MEMBERS_INFO_2 data in list)
+                    {
                         string ObjectType;
                         string ObjectName = data.lgrmi2_domainandname;
                         if (!ObjectName.Contains("\\"))
@@ -336,17 +430,13 @@ namespace SharpHound
 
                         string ObjectSID;
                         ConvertSidToStringSid(data.lgrmi2_sid, out ObjectSID);
-                        if (ObjectSID.EndsWith("-500") && !ObjectSID.StartsWith(DomainSID))
-                        {
-                            MachineSID = ObjectSID.Substring(0, ObjectSID.LastIndexOf("-"));
-                        }
 
-                        string domain = ObjectName.Split('\\')[0];
-
-                        if (domain.ToUpper().Equals(servername))
+                        if (ObjectSID.StartsWith(MachineSID))
                         {
                             continue;
                         }
+
+                        string domain = ObjectName.Split('\\')[0];
 
                         if (domain.ToUpper().Equals("NT AUTHORITY"))
                         {
@@ -354,7 +444,7 @@ namespace SharpHound
                         }
 
                         string username = ObjectName.Split('\\')[1];
-                        string membername = string.Format("{0}@{1}",username,_helpers.GetDomain(domain).Name);
+                        string membername = string.Format("{0}@{1}", username, _helpers.GetDomain(domain).Name);
                         users.Add(new LocalAdminInfo
                         {
                             server = Target,
@@ -363,8 +453,6 @@ namespace SharpHound
                             objecttype = ObjectType
                         });
                     }
-                    NetApiBufferFree(PtrInfo);
-                    users = users.Where(element => element.sid.StartsWith(DomainSID)).ToList();
                 }
                 return users;
             }

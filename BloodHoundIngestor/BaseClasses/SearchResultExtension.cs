@@ -48,5 +48,14 @@ namespace ExtensionMethods
                 return (byte[])result.Properties[prop][0];
             }
         }
+
+        public static void PrintSearchResult(this SearchResult result)
+        {
+            foreach (var name in result.Properties.PropertyNames)
+            {
+                Console.WriteLine(name.ToString());
+                Console.WriteLine(result.GetProp(name.ToString()));
+            }
+        }
     }
 }

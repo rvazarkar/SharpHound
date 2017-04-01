@@ -426,7 +426,7 @@ namespace SharpHound
             {
                 using (var dEntry = domain.GetDirectoryEntry())
                 {
-                    domainSid = (byte[])dEntry.Properties["objectSid"].Value;
+                    domainSid = dEntry.Properties["objectSid"].Value as byte[];
                     var sid = new SecurityIdentifier(domainSid, 0);
                     return sid.ToString();
                 }

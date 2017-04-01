@@ -231,7 +231,6 @@ namespace SharpHound
                     {
                         _options.WriteVerbose("Error converting " + DistinguishedName);
                     }
-
                 }
                 else
                 {

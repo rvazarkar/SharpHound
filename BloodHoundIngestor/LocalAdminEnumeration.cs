@@ -211,8 +211,8 @@ namespace SharpHound
                                     {
                                         EnumerationData.EnumResults.Enqueue(new LocalAdminInfo
                                         {
-                                            objectname = conver
-                                        })
+
+                                        });
                                     }
                                 }
                             }
@@ -515,7 +515,7 @@ namespace SharpHound
                 {
                     using (StreamWriter writer = new StreamWriter(_options.GetFilePath("local_admins.csv")))
                     {
-                        writer.WriteLine("ComputerName, AccountName, AccountType");
+                        writer.WriteLine("ComputerName,AccountName,AccountType");
                         while (true)
                         {
                             while (EnumerationData.EnumResults.IsEmpty)

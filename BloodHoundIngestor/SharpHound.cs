@@ -123,14 +123,16 @@ namespace SharpHound
                 switch (options.CollMethod)
                 {
                     case CollectionMethod.Default:
-                        TrustMapper = new DomainTrustMapping();
-                        TrustMapper.GetDomainTrusts();
-                        GroupEnumeration = new DomainGroupEnumeration();
-                        GroupEnumeration.EnumerateGroupMembership();
-                        AdminEnumeration = new LocalAdminEnumeration();
-                        AdminEnumeration.EnumerateLocalAdmins();
-                        SessionEnum = new SessionEnumeration();
-                        SessionEnum.EnumerateSessions();
+                        //TrustMapper = new DomainTrustMapping();
+                        //TrustMapper.GetDomainTrusts();
+                        //GroupEnumeration = new DomainGroupEnumeration();
+                        //GroupEnumeration.EnumerateGroupMembership();
+                        //AdminEnumeration = new LocalAdminEnumeration();
+                        //AdminEnumeration.EnumerateLocalAdmins();
+                        //SessionEnum = new SessionEnumeration();
+                        //SessionEnum.EnumerateSessions();
+                        SidCacheBuilder builder = new SidCacheBuilder();
+                        builder.StartEnumeration();
                         break;
                     case CollectionMethod.Trusts:
                         TrustMapper = new DomainTrustMapping();

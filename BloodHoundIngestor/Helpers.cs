@@ -18,11 +18,15 @@ namespace SharpHound
         private ConcurrentDictionary<string, string> SidConversionCache;
         private ConcurrentDictionary<string, bool> PingCache;
         private List<String> DomainList;
+
         private static Options options;
+        private static DBManager manager;
 
         public static void CreateInstance(Options cli)
         {
             instance = new Helpers(cli);
+            DBManager.CreateInstance(options.DBName);
+            manager = DBManager.Instance;
         }
 
         public static Helpers Instance
@@ -38,6 +42,14 @@ namespace SharpHound
             get
             {
                 return options;
+            }
+        }
+
+        public DBManager DBManager
+        {
+            get
+            {
+                return manager;
             }
         }
 
@@ -92,7 +104,7 @@ namespace SharpHound
             options.WriteVerbose(String.Format("[GetDomainSearcher] Search String: {0}", SearchString));
 
             DirectorySearcher Searcher = new DirectorySearcher(new DirectoryEntry(SearchString));
-            Searcher.PageSize = 200;
+            Searcher.PageSize = 1000;
             Searcher.SearchScope = SearchScope.Subtree;
             Searcher.CacheResults = false;
             Searcher.ReferralChasing = ReferralChasingOption.All;

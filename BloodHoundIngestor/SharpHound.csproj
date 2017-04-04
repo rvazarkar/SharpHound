@@ -99,11 +99,13 @@
     <Compile Include="ACLEnumeration.cs" />
     <Compile Include="BaseClasses\Computer.cs" />
     <Compile Include="BaseClasses\DBObject.cs" />
+    <Compile Include="BaseClasses\Domain.cs" />
     <Compile Include="BaseClasses\EnumeratorBase.cs" />
     <Compile Include="BaseClasses\Group.cs" />
     <Compile Include="BaseClasses\SearchResultExtension.cs" />
     <Compile Include="BaseClasses\User.cs" />
     <Compile Include="BaseClasses\WriterBase.cs" />
+    <Compile Include="CustomScheduler.cs" />
     <Compile Include="DBManager.cs" />
     <Compile Include="Objects\ACLInfo.cs" />
     <Compile Include="Objects\ADObject.cs" />
@@ -176,12 +178,12 @@ foreach (var item in filesToCleanup)
   <Target Name="CleanReferenceCopyLocalPaths" AfterTargets="AfterBuild;NonWinFodyTarget">
     <CosturaCleanup Config="FodyWeavers.xml" Files="@(ReferenceCopyLocalPaths->'$(OutDir)%(DestinationSubDirectory)%(Filename)%(Extension)')" />
   </Target>
-  <Import Project="..\packages\Fody.1.28.3\build\Fody.targets" Condition="Exists('..\packages\Fody.1.28.3\build\Fody.targets')" />
+  <Import Project="..\packages\Fody.1.29.4\build\portable-net+sl+win+wpa+wp\Fody.targets" Condition="Exists('..\packages\Fody.1.29.4\build\portable-net+sl+win+wpa+wp\Fody.targets')" />
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
       <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
     </PropertyGroup>
-    <Error Condition="!Exists('..\packages\Fody.1.28.3\build\Fody.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Fody.1.28.3\build\Fody.targets'))" />
+    <Error Condition="!Exists('..\packages\Fody.1.29.4\build\portable-net+sl+win+wpa+wp\Fody.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Fody.1.29.4\build\portable-net+sl+win+wpa+wp\Fody.targets'))" />
   </Target>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

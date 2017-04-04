@@ -8,9 +8,9 @@ using System.Text;
 
 namespace SharpHound
 {
-    class DBManager
+    public class DBManager
     {
-        LiteDatabase db;
+        private LiteDatabase db;
         private static DBManager instance;
 
         public static void CreateInstance(string file = null)
@@ -33,6 +33,14 @@ namespace SharpHound
             }
         }
 
+        public LiteDatabase DBHandle
+        {
+            get
+            {
+                return db;
+            }
+        }
+
         private DBManager()
         {
             var mem = new MemoryStream();
@@ -44,48 +52,95 @@ namespace SharpHound
             db = new LiteDatabase(file);
         }
 
+        public bool ContainsSid(string sid)
+        {
+            var users = db.GetCollection<User>("users");
+            var groups = db.GetCollection<Group>("groups");
+            var computers = db.GetCollection<Computer>("computers");
+
+            if (users.FindOne(x => x.SID.Equals(sid)) != null)
+            {
+                return true;
+            }
+            if (computers.FindOne(x => x.SID.Equals(sid)) != null)
+            {
+                return true;
+            }
+            if (groups.FindOne(x => x.SID.Equals(sid)) != null)
+            {
+                return true;
+            }
+            return false;
+        }
+
+        public bool IsDomainCompleted(string Domain)
+        {
+            var domains = db.GetCollection<Domain>("domains");
+            Domain d = domains.FindOne(x => x.DomainName.Equals(Domain));
+            if (d == null || !d.Completed)
+            {
+                return false;
+            }
+            else
+            {
+                return true;
+            }
+
+        }
+
         public void InsertRecord(DBObject record)
         {
+            var users = db.GetCollection<User>("users");
+            var groups = db.GetCollection<Group>("groups");
+            var computers = db.GetCollection<Computer>("computers");
+            var domains = db.GetCollection<Domain>("domains");
+            
             if (record.GetType().Equals(typeof(User)))
             {
-                var users = db.GetCollection<User>("users");
                 users.Upsert(record as User);
-                users.EnsureIndex(x => x.SID);
-                users.EnsureIndex(x => x.DistinguishedName);
             }
             else if (record.GetType().Equals(typeof(Group)))
             {
-                var groups = db.GetCollection<Group>("groups");
                 groups.Upsert(record as Group);
-                groups.EnsureIndex(x => x.SID);
-                groups.EnsureIndex(x => x.DistinguishedName);
             }
             else if (record.GetType().Equals(typeof(Computer)))
             {
-                var computers = db.GetCollection<Computer>("computers");
                 computers.Upsert(record as Computer);
-                computers.EnsureIndex(x => x.SID);
-                computers.EnsureIndex(x => x.DNSHostName);
+            }else if (record.GetType().Equals(typeof(Domain)))
+            {
+                domains.Upsert(record as Domain);
+            }
+            
+        }
+
+        public bool FindDistinguishedName(string dn, out Group matched)
+        {
+            matched = db.GetCollection<Group>("groups")
+                .FindOne(x => x.DistinguishedName.Equals(dn));
+            
+            if (matched == null)
+            {
+                return false;
+            }
+            else
+            {
+                return true;
             }
         }
 
-        public void PrintUsers()
+        public LiteCollection<User> GetUsers()
         {
-            var users = db.GetCollection<User>("users");
-            foreach (User x in users.FindAll())
-            {
-                Console.WriteLine(x.BloodHoundDisplayName);
-            }
+            return db.GetCollection<User>("users");
         }
 
-        public void PrintGroups()
+        public LiteCollection<Computer> GetComputers()
         {
-            var groups = db.GetCollection<Group>("groups");
-            foreach (Group x in groups.FindAll())
-            {
-                Console.WriteLine(x.BloodHoundDisplayName);
-            }
+            return db.GetCollection<Computer>("computers");
         }
-        
+
+        public LiteCollection<Group> GetGroups()
+        {
+            return db.GetCollection<Group>("groups");
+        }        
     }
 }

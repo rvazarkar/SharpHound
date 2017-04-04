@@ -5,7 +5,7 @@ using System.Text;
 
 namespace SharpHound.BaseClasses
 {
-    class DBObject
+    public class DBObject
     {
     }
 }

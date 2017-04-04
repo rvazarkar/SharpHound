@@ -1,4 +1,6 @@
 ﻿using ExtensionMethods;
+using LiteDB;
+using SharpHound.BaseClasses;
 using SharpHound.Objects;
 using System;
 using System.Collections.Concurrent;
@@ -9,6 +11,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace SharpHound
 {
@@ -16,11 +19,193 @@ namespace SharpHound
     {
         private Helpers Helpers;
         private Options options;
+        private DBManager manager;
+
+        public static int progress = 0;
+        public static int totalcount;
+        static private readonly object _sync = new object();
+        private static int cursortop;
 
         public DomainGroupEnumeration()
         {
             Helpers = Helpers.Instance;
             options = Helpers.Options;
+            manager = Helpers.DBManager;
+        }
+
+        public void StartEnumeration()
+        {
+            Console.WriteLine("Starting Group Enumeration");
+            List<string> Domains = Helpers.GetDomainList();
+
+            foreach (string DomainName in Domains)
+            {
+                BlockingCollection<DBObject> input = new BlockingCollection<DBObject>();
+                BlockingCollection<GroupMembershipInfo> output = new BlockingCollection<GroupMembershipInfo>();
+
+                LimitedConcurrencyLevelTaskScheduler scheduler = new LimitedConcurrencyLevelTaskScheduler(options.Threads);
+                TaskFactory factory = new TaskFactory(scheduler);
+
+                List<Task> taskhandles = new List<Task>();
+
+                System.Timers.Timer t = new System.Timers.Timer();
+                t.Elapsed += new System.Timers.ElapsedEventHandler(Timer_Tick);
+
+                t.Interval = 1000;
+                t.Enabled = true;
+
+                Task writer = StartWriter(output, options, factory);
+                taskhandles.Add(StartConsumer(input, output, factory, manager));
+
+                totalcount = 0;
+
+                var users =
+                    manager.GetUsers().Find(
+                        Query.And(
+                            Query.EQ("Domain", DomainName),
+                            Query.Or(
+                                Query.GT("MemberOf.Count", 0),
+                                Query.Not(Query.EQ("PrimaryGroupId", null)))));
+
+                var groups =
+                    manager.GetGroups().Find(
+                        Query.And(
+                            Query.EQ("Domain", DomainName),
+                            Query.Or(
+                                Query.GT("MemberOf.Count", 0),
+                                Query.Not(Query.EQ("PrimaryGroupId", null)))));
+                var computers =
+                    manager.GetComputers().Find(
+                        Query.And(
+                            Query.EQ("Domain", DomainName),
+                            Query.Or(
+                                Query.GT("MemberOf.Count", 0),
+                                Query.Not(Query.EQ("PrimaryGroupId", null)))));
+
+                totalcount = users.Count() + groups.Count() + computers.Count();
+                cursortop = Console.CursorTop;
+
+                foreach (User u in users)
+                {
+                    input.Add(u);
+                }
+
+                foreach (Group g in groups)
+                {
+                    input.Add(g);
+                }
+
+                foreach (Computer c in computers)
+                {
+                    input.Add(c);
+                }
+
+                input.CompleteAdding();
+                Task.WaitAll(taskhandles.ToArray());
+                output.CompleteAdding();
+                writer.Wait();
+                t.Dispose();
+            }
+        }
+
+        private void Timer_Tick(object sender, System.Timers.ElapsedEventArgs args)
+        {
+            DomainGroupEnumeration.UpdateProgress(DomainGroupEnumeration.progress, DomainGroupEnumeration.totalcount);
+        }
+
+        private static void UpdateProgress(int progress, int total)
+        {
+            int percentage = (int)100.0 * progress / total;
+            lock (_sync)
+            {
+                Console.CursorLeft = 0;
+                Console.CursorTop = DomainGroupEnumeration.cursortop;
+                string item = string.Format("{0} / {1}", progress, total);
+                Console.Write(item + " [" + new string('=', percentage / 2) + "] " + percentage + "%");
+            }
+        }
+
+        private Task StartConsumer(BlockingCollection<DBObject> input, BlockingCollection<GroupMembershipInfo> output, TaskFactory factory, DBManager db)
+        {
+            return factory.StartNew(() =>
+            {
+                foreach (DBObject obj in input.GetConsumingEnumerable())
+                {
+                    if (obj is User)
+                    {
+                        User temp = obj as User;
+                        foreach (string dn in temp.MemberOf)
+                        {
+                            Group g;
+                            if (db.FindDistinguishedName(dn, out g))
+                            {
+                                output.Add(new GroupMembershipInfo
+                                {
+                                    AccountName = temp.BloodHoundDisplayName,
+                                    GroupName = g.BloodHoundDisplayName,
+                                    ObjectType = "user"
+                                });
+                            }
+                        }
+                    }
+                    else if (obj is Group)
+                    {
+                        Group temp = obj as Group;
+                        foreach (string dn in temp.MemberOf)
+                        {
+                            Group g;
+                            if (db.FindDistinguishedName(dn, out g))
+                            {
+                                output.Add(new GroupMembershipInfo
+                                {
+                                    AccountName = temp.BloodHoundDisplayName,
+                                    GroupName = g.BloodHoundDisplayName,
+                                    ObjectType = "group"
+                                });
+                            }
+                        }
+                    }
+                    else if (obj is Computer)
+                    {
+                        Computer temp = obj as Computer;
+                        foreach (string dn in temp.MemberOf)
+                        {
+                            Group g;
+                            if (db.FindDistinguishedName(dn, out g))
+                            {
+                                output.Add(new GroupMembershipInfo
+                                {
+                                    AccountName = temp.BloodHoundDisplayName,
+                                    GroupName = g.BloodHoundDisplayName,
+                                    ObjectType = "computer"
+                                });
+                            }
+                        }
+                    }
+
+                    DomainGroupEnumeration.progress++;
+                    Thread.Sleep(1000);
+                }
+            }); 
+        }
+
+        private Task StartWriter(BlockingCollection<GroupMembershipInfo> output, Options _options, TaskFactory factory)
+        {
+            return factory.StartNew(() =>
+            {
+                if (_options.URI == null)
+                {
+                    using (StreamWriter writer = new StreamWriter(_options.GetFilePath("group_memberships.csv")))
+                    {
+                        writer.WriteLine("GroupName,AccountName,AccountType");
+                        writer.AutoFlush = true;
+                        foreach (GroupMembershipInfo info in output.GetConsumingEnumerable())
+                        {
+                            writer.WriteLine(info.ToCSV());
+                        }
+                    }
+                }
+            });
         }
 
         public void EnumerateGroupMembership()
@@ -59,11 +244,6 @@ namespace SharpHound
                 }
                 int lTotal = 0;
 
-                System.Timers.Timer t = new System.Timers.Timer();
-                t.Elapsed += new System.Timers.ElapsedEventHandler(Timer_Tick);
-
-                t.Interval = options.Interval;
-                t.Enabled = true;
 
                 PrintStatus();
 
@@ -85,7 +265,6 @@ namespace SharpHound
 
                 WaitHandle.WaitAll(doneEvents);
                 Console.WriteLine(String.Format("Done group enumeration for domain {0} with {1} objects", DomainName, EnumerationData.count));
-                t.Dispose();
             }
 
             watch.Stop();
@@ -93,11 +272,6 @@ namespace SharpHound
 
             EnumerationData.EnumResults.Enqueue(null);
             write.Join();
-        }
-
-        private void Timer_Tick(object sender, System.Timers.ElapsedEventArgs args)
-        {
-            PrintStatus();
         }
 
         private void PrintStatus()

@@ -57,5 +57,47 @@ namespace ExtensionMethods
                 Console.WriteLine(result.GetProp(name.ToString()));
             }
         }
+
+        public static string GetProp(this DirectoryEntry result, string prop)
+        {
+            if (result.Properties.Contains(prop))
+            {
+                return result.Properties[prop].Value.ToString();
+            }
+            else
+            {
+                return null;
+            }
+        }
+
+        public static byte[] GetPropBytes(this DirectoryEntry result, string prop)
+        {
+            if (result.Properties.Contains(prop))
+            {
+                return result.Properties[prop].Value as byte[];
+            }
+            else
+            {
+                return null;
+            }
+        }
+
+        public static List<string> GetPropArray(this DirectoryEntry result, string prop)
+        {
+            if (result.Properties.Contains(prop))
+            {
+                List<string> list = new List<string>();
+                foreach (var x in result.Properties[prop])
+                {
+                    list.Add(x.ToString());
+                }
+                return list;
+            }
+            else
+            {
+                return null;
+            }
+        }
+
     }
 }

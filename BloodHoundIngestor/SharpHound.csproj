@@ -102,7 +102,7 @@
     <Compile Include="BaseClasses\Domain.cs" />
     <Compile Include="BaseClasses\EnumeratorBase.cs" />
     <Compile Include="BaseClasses\Group.cs" />
-    <Compile Include="BaseClasses\SearchResultExtension.cs" />
+    <Compile Include="BaseClasses\Extensions.cs" />
     <Compile Include="BaseClasses\User.cs" />
     <Compile Include="BaseClasses\WriterBase.cs" />
     <Compile Include="CustomScheduler.cs" />

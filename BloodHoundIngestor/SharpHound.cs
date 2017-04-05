@@ -123,6 +123,9 @@ namespace SharpHound
                 SessionEnumeration SessionEnum;
                 ACLEnumeration ACLEnum;
 
+                SidCacheBuilder builder = new SidCacheBuilder();
+                builder.StartEnumeration();
+
                 switch (options.CollMethod)
                 {
                     case CollectionMethod.Default:
@@ -134,8 +137,6 @@ namespace SharpHound
                         //AdminEnumeration.EnumerateLocalAdmins();
                         //SessionEnum = new SessionEnumeration();
                         //SessionEnum.EnumerateSessions();
-                        SidCacheBuilder builder = new SidCacheBuilder();
-                        builder.StartEnumeration();
                         GroupEnumeration = new DomainGroupEnumeration();
                         GroupEnumeration.StartEnumeration();
                         break;
@@ -151,7 +152,7 @@ namespace SharpHound
                         break;
                     case CollectionMethod.Group:
                         GroupEnumeration = new DomainGroupEnumeration();
-                        GroupEnumeration.EnumerateGroupMembership();
+                        GroupEnumeration.StartEnumeration();
                         break;
                     case CollectionMethod.LoggedOn:
                         SessionEnum = new SessionEnumeration();

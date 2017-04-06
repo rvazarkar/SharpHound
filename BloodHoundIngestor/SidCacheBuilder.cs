@@ -35,15 +35,21 @@ namespace SharpHound
             List<string> Domains = helpers.GetDomainList();
             
             DBManager dbmanager = DBManager.Instance;
-            String[] props = new String[] { "samaccountname", "distinguishedname", "dnshostname", "samaccounttype", "primarygroupid", "memberof", "objectsid" };
+            String[] props = new String[] { "samaccountname", "distinguishedname", "dnshostname", "samaccounttype", "primarygroupid", "memberof", "objectsid", "objectclass", "ntsecuritydescriptor", "serviceprincipalname" };
+
+            Stopwatch watch = Stopwatch.StartNew();
+            Stopwatch overwatch = Stopwatch.StartNew();
+            bool DidEnumerate = false;
 
             foreach (string DomainName in Domains)
             {
-                if (dbmanager.IsDomainCompleted(DomainName))
+                if (dbmanager.IsDomainCompleted(DomainName) && !options.Rebuild)
                 {
                     Console.WriteLine(string.Format("Skipping cache building for {0} because it already exists", DomainName));
                     continue;
                 }
+                DidEnumerate = true;
+                Console.WriteLine("Building database for " + DomainName);
                 dbmanager.InsertRecord(new BaseClasses.Domain
                 {
                     DomainName = DomainName,
@@ -63,24 +69,24 @@ namespace SharpHound
                 t.Interval = options.Interval;
                 t.Enabled = true;
 
-                DirectorySearcher searcher = helpers.GetDomainSearcher(DomainName);
-                searcher.Filter = "(|(samAccountType=805306368)(samAccountType=805306369)(samAccountType=268435456)(samAccountType=268435457)(samAccountType=536870912)(samAccountType=536870913))";
-                searcher.PropertiesToLoad.AddRange(props);
-
-                
                 DBManager db = DBManager.Instance;
                 List<Task> taskhandles = new List<Task>();
                 Task WriterTask = StartWriter(output, factory);
                 
-                for (int i = 0; i < options.Threads - 1 ; i++)
+                for (int i = 0; i < options.Threads; i++)
                 {
                     taskhandles.Add(StartConsumer(input, output, factory, DomainName, i));
                 }
-                
+
+                DirectorySearcher searcher = helpers.GetDomainSearcher(DomainName);
+                searcher.Filter = "(|(samAccountType=805306368)(samAccountType=805306369)(samAccountType=268435456)(samAccountType=268435457)(samAccountType=536870912)(samAccountType=536870913))";
+                searcher.PropertiesToLoad.AddRange(props);
+
                 foreach (SearchResult r in searcher.FindAll())
                 {
                     input.Add(r);
                 }
+
                 searcher.Dispose();
                 input.CompleteAdding();
                 Task.WaitAll(taskhandles.ToArray());
@@ -92,7 +98,15 @@ namespace SharpHound
                     DomainName = DomainName,
                     Completed = true
                 });
+                Console.WriteLine("Built database for " + DomainName + " in " + watch.Elapsed);
+                watch.Reset();
             }
+            if (DidEnumerate)
+            {
+                Console.WriteLine("Finished database building in " + overwatch.Elapsed);
+            }
+            overwatch.Stop();
+            watch.Stop();
         }
 
         private void Timer_Tick(object sender, System.Timers.ElapsedEventArgs args)
@@ -102,7 +116,7 @@ namespace SharpHound
 
         private void PrintStatus()
         {
-            Console.WriteLine(string.Format("{0} done (+ {1}) ({2}/s) ({3})", count, count - last, (float)((count - last) / (options.Interval / 1000)), watch.Elapsed));
+            Console.WriteLine(string.Format("{0} done (+{1}) ({2}/s) ({3})", count, count - last, (float)((count - last) / (options.Interval / 1000)), watch.Elapsed));
             last = count;
         }
 
@@ -140,7 +154,7 @@ namespace SharpHound
                     }
                 }
                 transaction.Commit();
-            }, TaskCreationOptions.LongRunning);
+            });
         }
 
         private static Task StartConsumer(BlockingCollection<SearchResult> input, 
@@ -153,100 +167,13 @@ namespace SharpHound
                 string[] groups = new string[] { "268435456", "268435457", "536870912", "536870913" };
                 string[] computers = new string[] { "805306369" };
                 string[] users = new string[] { "805306368" };
+                System.Text.RegularExpressions.Regex re = new System.Text.RegularExpressions.Regex(@"HOST\/([A-Za-z0-9-_]*\.[A-Za-z0-9-_]*\.[A-Za-z0-9-_]*)$");
 
                 foreach (SearchResult r in input.GetConsumingEnumerable())
                 {
-                    byte[] ObjectSidBytes = r.GetPropBytes("objectsid");
-                    if (ObjectSidBytes == null)
-                    {
-                        return;
-                    }
-
-                    string ObjectSidString = new SecurityIdentifier(ObjectSidBytes, 0).ToString();
-
-                    DBObject temp;
-                    string SaMAccountType = r.GetProp("samaccounttype");
-                    if (groups.Contains(SaMAccountType))
-                    {
-                        List<string> memberof = new List<string>();
-
-                        List<string> t = r.GetPropArray("memberof");
-                        if (t != null)
-                        {
-                            foreach (string dn in t)
-                            {
-                                memberof.Add(dn);
-                            }
-                        }
-
-                        string samaccountname = r.GetProp("samaccountname");
-                        string BDisplay = string.Format("{0}@{1}", samaccountname.ToUpper(), DomainName);
-
-                        temp = new Group
-                        {
-                            Domain = DomainName,
-                            DistinguishedName = r.GetProp("distinguishedname"),
-                            PrimaryGroupID = r.GetProp("primarygroupid"),
-                            SID = ObjectSidString,
-                            MemberOf = memberof,
-                            SAMAccountName = samaccountname,
-                            BloodHoundDisplayName = BDisplay
-                        };
-                    }
-                    else if (users.Contains(SaMAccountType))
-                    {
-                        List<string> memberof = new List<string>();
-
-                        List<string> t = r.GetPropArray("memberof");
-                        if (t != null)
-                        {
-                            foreach (string dn in t)
-                            {
-                                memberof.Add(dn);
-                            }
-                        }
-
-                        string samaccountname = r.GetProp("samaccountname");
-                        string BDisplay = string.Format("{0}@{1}", samaccountname.ToUpper(), DomainName);
-                        temp = new User
-                        {
-                            Domain = DomainName,
-                            DistinguishedName = r.GetProp("distinguishedname"),
-                            PrimaryGroupID = r.GetProp("primarygroupid"),
-                            SID = ObjectSidString,
-                            MemberOf = memberof,
-                            BloodHoundDisplayName = BDisplay,
-                            SAMAccountName = samaccountname
-                        };
-                    }
-                    else
-                    {
-                        List<string> memberof = new List<string>();
-
-                        List<string> t = r.GetPropArray("memberof");
-                        if (t != null)
-                        {
-                            foreach (string dn in t)
-                            {
-                                memberof.Add(dn);
-                            }
-                        }
-
-                        string hostname = r.GetProp("dnshostname");
-
-                        temp = new Computer
-                        {
-                            DNSHostName = hostname,
-                            BloodHoundDisplayName = hostname,
-                            Domain = DomainName,
-                            MemberOf = memberof,
-                            SID = ObjectSidString,
-                            PrimaryGroupID = r.GetProp("primarygroupid")
-                        };
-                    }
-                    output.Add(temp);
+                    output.Add(r.ConvertToDB());
                 }
-            }, TaskCreationOptions.LongRunning);
+            });
         }
     }
 }

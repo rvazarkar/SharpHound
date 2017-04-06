@@ -21,5 +21,6 @@ namespace SharpHound.BaseClasses
         public string Domain { get; set; }
         public string SAMAccountName { get; set; }
         public string Type { get; set; }
+        public byte[] NTSecurityDescriptor { get; set; }
     }
 }

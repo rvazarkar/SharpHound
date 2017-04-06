@@ -38,9 +38,11 @@ namespace SharpHound
         {
             Console.WriteLine("Starting Group Enumeration");
             List<string> Domains = Helpers.GetDomainList();
-
+            Stopwatch watch = Stopwatch.StartNew();
+            Stopwatch overwatch = Stopwatch.StartNew();
             foreach (string DomainName in Domains)
             {
+                Console.WriteLine("Started group member enumeration for " + DomainName);
                 CurrentDomain = DomainName;
                 BlockingCollection<DBObject> input = new BlockingCollection<DBObject>();
                 BlockingCollection<GroupMembershipInfo> output = new BlockingCollection<GroupMembershipInfo>();
@@ -55,7 +57,7 @@ namespace SharpHound
                 System.Timers.Timer t = new System.Timers.Timer();
                 t.Elapsed += new System.Timers.ElapsedEventHandler(Timer_Tick);
 
-                t.Interval = 1000;
+                t.Interval = options.Interval;
                 t.Enabled = true;
 
                 Task writer = StartWriter(output, options, factory);
@@ -107,11 +109,23 @@ namespace SharpHound
                 Task.WaitAll(taskhandles.ToArray());
                 output.CompleteAdding();
                 writer.Wait();
+                PrintStatus();
                 t.Dispose();
+
+                Console.WriteLine("Finished group member enumeration for " + DomainName + " in " + watch.Elapsed);
+                watch.Reset();
             }
+            Console.WriteLine("Finished group membership enumeration in " + overwatch.Elapsed);
+            watch.Stop();
+            overwatch.Stop();
         }
 
         private void Timer_Tick(object sender, System.Timers.ElapsedEventArgs args)
+        {
+            PrintStatus();
+        }
+
+        private void PrintStatus()
         {
             int c = DomainGroupEnumeration.totalcount;
             int p = DomainGroupEnumeration.progress;
@@ -176,6 +190,19 @@ namespace SharpHound
                         }
                     }
 
+                    if (obj.PrimaryGroupID != null)
+                    {
+                        string domainsid = obj.SID.Substring(0, obj.SID.LastIndexOf("-"));
+                        string pgsid = domainsid + "-" + obj.PrimaryGroupID;
+                        string group = Helpers.ConvertSIDToName(pgsid).Split('\\').Last();
+
+                        output.Add(new GroupMembershipInfo
+                        {
+                            AccountName = obj.BloodHoundDisplayName,
+                            GroupName = string.Format("{0}@{1}",group.ToUpper(),obj.Domain),
+                            ObjectType = obj.Type
+                        });
+                    }
                     Interlocked.Increment(ref DomainGroupEnumeration.progress);
                 }
             }); 

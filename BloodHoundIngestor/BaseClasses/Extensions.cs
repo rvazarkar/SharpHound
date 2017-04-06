@@ -1,7 +1,10 @@
-﻿using System;
+﻿using SharpHound;
+using SharpHound.BaseClasses;
+using System;
 using System.Collections.Generic;
 using System.DirectoryServices;
 using System.Linq;
+using System.Security.Principal;
 using System.Text;
 
 namespace ExtensionMethods
@@ -23,7 +26,7 @@ namespace ExtensionMethods
         {
             if (result.Properties[prop].Count == 0)
             {
-                return null;
+                return new List<string>();
             }
             else
             {
@@ -56,6 +59,102 @@ namespace ExtensionMethods
                 Console.WriteLine(name.ToString());
                 Console.WriteLine(result.GetProp(name.ToString()));
             }
+        }
+
+        public static DBObject ConvertToDB(this SearchResult result, string Domain = null)
+        {
+            string[] groups = new string[] { "268435456", "268435457", "536870912", "536870913" };
+            string[] computers = new string[] { "805306369" };
+            string[] users = new string[] { "805306368" };
+            System.Text.RegularExpressions.Regex re = new System.Text.RegularExpressions.Regex(@"HOST\/([A-Za-z0-9-_]*\.[A-Za-z0-9-_]*\.[A-Za-z0-9-_]*)$");
+
+            byte[] sidbytes = result.GetPropBytes("objectsid");
+            if (sidbytes == null)
+            {
+                return null;
+            }
+
+            byte[] nt = result.GetPropBytes("ntsecuritydescriptor");
+            string sidstring = new SecurityIdentifier(sidbytes, 0).ToString();
+            string accounttype = result.GetProp("samaccounttype");
+            DBObject temp;
+
+            List<string> memberof = result.GetPropArray("memberof");
+            string san = result.GetProp("samaccountname");
+            string dn = result.GetProp("distinguishedname");
+            string pgi = result.GetProp("primarygroupid");
+
+            if (Domain == null)
+            {
+                Domain = Helpers.DomainFromDN(dn);
+            }
+
+            if (groups.Contains(accounttype))
+            {
+                temp = new Group
+                {
+                    DistinguishedName = dn,
+                    BloodHoundDisplayName = $"{san.ToUpper()}@{Domain}",
+                    Domain = Domain,
+                    MemberOf = memberof,
+                    PrimaryGroupID = pgi,
+                    SAMAccountName = san,
+                    NTSecurityDescriptor = nt,
+                    SID = sidstring,
+                    Type = "group"
+                };
+            }else if (users.Contains(accounttype))
+            {
+                temp = new User
+                {
+                    BloodHoundDisplayName = $"{san.ToUpper()}@{Domain}",
+                    DistinguishedName = dn,
+                    Domain = Domain,
+                    MemberOf = memberof,
+                    NTSecurityDescriptor = nt,
+                    PrimaryGroupID = pgi,
+                    SAMAccountName = san,
+                    ServicePrincipalName = result.GetPropArray("serviceprincipalname"),
+                    SID = sidstring,
+                    Type = "user"
+                };
+            }
+            else
+            {
+                string hostname = result.GetProp("dnshostname");
+                if (hostname == null)
+                {
+                    List<string> spns = result.GetPropArray("serviceprincipalname");
+                    foreach (string s in spns)
+                    {
+                        var x = re.Match(s);
+                        if (x.Success)
+                        {
+                            hostname = x.Groups[1].Value;
+                        }
+                    }
+                }
+                if (hostname == null)
+                {
+                    return null;
+                }
+
+                temp = new Computer
+                {
+                    BloodHoundDisplayName = hostname.ToUpper(),
+                    Domain = Domain,
+                    DistinguishedName = dn,
+                    DNSHostName = hostname,
+                    MemberOf = memberof,
+                    NTSecurityDescriptor = nt,
+                    PrimaryGroupID = pgi,
+                    SAMAccountName = san,
+                    SID = sidstring,
+                    Type = "computer"
+                };
+            }
+
+            return temp;
         }
 
         public static string GetProp(this DirectoryEntry result, string prop)
@@ -97,6 +196,103 @@ namespace ExtensionMethods
             {
                 return null;
             }
+        }
+
+        public static DBObject ConvertToDB(this DirectoryEntry result, string Domain = null)
+        {
+            string[] groups = new string[] { "268435456", "268435457", "536870912", "536870913" };
+            string[] computers = new string[] { "805306369" };
+            string[] users = new string[] { "805306368" };
+            System.Text.RegularExpressions.Regex re = new System.Text.RegularExpressions.Regex(@"HOST\/([A-Za-z0-9-_]*\.[A-Za-z0-9-_]*\.[A-Za-z0-9-_]*)$");
+
+            byte[] sidbytes = result.GetPropBytes("objectsid");
+            if (sidbytes == null)
+            {
+                return null;
+            }
+
+            byte[] nt = result.GetPropBytes("ntsecuritydescriptor");
+            string sidstring = new SecurityIdentifier(sidbytes, 0).ToString();
+            string accounttype = result.GetProp("samaccounttype");
+            DBObject temp;
+
+            List<string> memberof = result.GetPropArray("memberof");
+            string san = result.GetProp("samaccountname");
+            string dn = result.GetProp("distinguishedname");
+            string pgi = result.GetProp("primarygroupid");
+
+            if (Domain == null)
+            {
+                Domain = Helpers.DomainFromDN(dn);
+            }
+
+            if (groups.Contains(accounttype))
+            {
+                temp = new Group
+                {
+                    DistinguishedName = dn,
+                    BloodHoundDisplayName = $"{san.ToUpper()}@{Domain}",
+                    Domain = Domain,
+                    MemberOf = memberof,
+                    PrimaryGroupID = pgi,
+                    SAMAccountName = san,
+                    NTSecurityDescriptor = nt,
+                    SID = sidstring,
+                    Type = "group"
+                };
+            }
+            else if (users.Contains(accounttype))
+            {
+                temp = new User
+                {
+                    BloodHoundDisplayName = $"{san.ToUpper()}@{Domain}",
+                    DistinguishedName = dn,
+                    Domain = Domain,
+                    MemberOf = memberof,
+                    NTSecurityDescriptor = nt,
+                    PrimaryGroupID = pgi,
+                    SAMAccountName = san,
+                    ServicePrincipalName = result.GetPropArray("serviceprincipalname"),
+                    SID = sidstring,
+                    Type = "user"
+                };
+            }
+            else
+            {
+                string hostname = result.GetProp("dnshostname");
+                if (hostname == null)
+                {
+                    List<string> spns = result.GetPropArray("serviceprincipalname");
+                    foreach (string s in spns)
+                    {
+                        var x = re.Match(s);
+                        if (x.Success)
+                        {
+                            hostname = x.Groups[1].Value;
+                        }
+                    }
+                }
+                if (hostname == null)
+                {
+                    return null;
+                }
+
+                temp = new Computer
+                {
+                    BloodHoundDisplayName = hostname.ToUpper(),
+                    Domain = Domain,
+                    DistinguishedName = dn,
+                    DNSHostName = hostname,
+                    MemberOf = memberof,
+                    NTSecurityDescriptor = nt,
+                    PrimaryGroupID = pgi,
+                    SAMAccountName = san,
+                    SID = sidstring,
+                    Type = "computer"
+                };
+            }
+
+            return temp;
         }
 
     }

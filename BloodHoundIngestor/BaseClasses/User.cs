@@ -8,6 +8,6 @@ namespace SharpHound.BaseClasses
 {
     public class User : DBObject
     {
-        public new string Type = "user";
+        public List<string> ServicePrincipalName { get; set; }
     }
 }

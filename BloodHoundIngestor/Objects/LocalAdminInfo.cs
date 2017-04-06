@@ -10,7 +10,6 @@ namespace SharpHound
         public string server { get; set; }
         public string objectname { get; set; }
         public string objecttype { get; set; }
-        public string sid { get; set; }
 
         public LocalAdminInfo()
         {

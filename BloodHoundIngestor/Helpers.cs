@@ -62,9 +62,9 @@ namespace SharpHound
             options = cli;
         }
 
-        public bool IsWritingCSV()
+        public static string DomainFromDN(string dn)
         {
-            return options.URI == null;
+            return dn.Substring(dn.IndexOf("DC=")).Replace("DC=", "").Replace(",", ".");
         }
 
         public DirectorySearcher GetDomainSearcher(string Domain = null, string SearchBase = null, string ADSPath = null)

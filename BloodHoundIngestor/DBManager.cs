@@ -73,6 +73,77 @@ namespace SharpHound
             return false;
         }
 
+        public bool FindBySID(string sid, out DBObject obj)
+        {
+            var users = db.GetCollection<User>("users");
+            var groups = db.GetCollection<Group>("groups");
+            var computers = db.GetCollection<Computer>("computers");
+
+
+            obj = users.FindOne(x => x.SID.Equals(sid));
+            if (obj != null)
+            {
+                return true;
+            }
+            obj = computers.FindOne(x => x.SID.Equals(sid));
+            if (obj != null)
+            {
+                return true;
+            }
+
+            obj = groups.FindOne(x => x.SID.Equals(sid));
+            if (obj != null)
+            {
+                return true;
+            }
+            return false;
+        }
+
+        public bool FindUserBySID(string sid, out DBObject obj)
+        {
+            var users = db.GetCollection<User>("users");
+
+            obj = users.FindOne(x => x.SID.Equals(sid));
+            if (obj == null)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        public bool FindGroupBySID(string sid, out DBObject obj)
+        {
+            var groups = db.GetCollection<Group>("groups");
+
+            obj = groups.FindOne(x => x.SID.Equals(sid));
+            if (obj == null)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        public bool FindComputerBySID(string sid, out DBObject obj)
+        {
+            var computers = db.GetCollection<Computer>("computers");
+
+            obj = computers.FindOne(x => x.SID.Equals(sid));
+            if (obj == null)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
         public bool IsDomainCompleted(string Domain)
         {
             var domains = db.GetCollection<Domain>("domains");

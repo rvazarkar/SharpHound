@@ -11,5 +11,6 @@ namespace SharpHound.BaseClasses
         [BsonIndex, BsonId]
         public string DomainName { get; set; }
         public bool Completed { get; set; }
+        public string DomainSid { get; set; }
     }
 }

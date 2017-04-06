@@ -8,6 +8,5 @@ namespace SharpHound.BaseClasses
 {
     public class Group : DBObject
     {
-        public new string Type = "group";
     }
 }

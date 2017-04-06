@@ -67,6 +67,9 @@ namespace SharpHound
         [Option("db", DefaultValue ="BloodHound.db", HelpText ="Filename of the DB Cache")]
         public string DBName { get; set; }
 
+        [Option("ForceRebuild", DefaultValue =false, HelpText ="Rebuild database cache")]
+        public bool Rebuild { get; set; }
+
         [ParserState]
         public IParserState LastParserState { get; set; }
 
@@ -133,8 +136,8 @@ namespace SharpHound
                         //TrustMapper.GetDomainTrusts();
                         //GroupEnumeration = new DomainGroupEnumeration();
                         //GroupEnumeration.EnumerateGroupMembership();
-                        //AdminEnumeration = new LocalAdminEnumeration();
-                        //AdminEnumeration.EnumerateLocalAdmins();
+                        AdminEnumeration = new LocalAdminEnumeration();
+                        AdminEnumeration.StartEnumeration();
                         //SessionEnum = new SessionEnumeration();
                         //SessionEnum.EnumerateSessions();
                         GroupEnumeration = new DomainGroupEnumeration();
@@ -146,7 +149,7 @@ namespace SharpHound
                         break;
                     case CollectionMethod.ComputerOnly:
                         AdminEnumeration = new LocalAdminEnumeration();
-                        AdminEnumeration.EnumerateLocalAdmins();
+                        //AdminEnumeration.EnumerateLocalAdmins();
                         SessionEnum = new SessionEnumeration();
                         SessionEnum.EnumerateSessions();
                         break;
@@ -160,7 +163,7 @@ namespace SharpHound
                         break;
                     case CollectionMethod.LocalGroup:
                         AdminEnumeration = new LocalAdminEnumeration();
-                        AdminEnumeration.EnumerateLocalAdmins();
+                        //AdminEnumeration.EnumerateLocalAdmins();
                         break;
                     case CollectionMethod.Session:
                         SessionEnum = new SessionEnumeration();

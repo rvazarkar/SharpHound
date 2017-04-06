@@ -24,12 +24,14 @@ namespace SharpHound
         private static int count;
         private static int dead;
         private static int total;
+        private ConcurrentDictionary<string, LocalAdminInfo> unresolved;
 
         public LocalAdminEnumeration()
         {
             Helpers = Helpers.Instance;
             options = Helpers.Options;
             db = Helpers.DBManager;
+            unresolved = new ConcurrentDictionary<string, LocalAdminInfo>();
         }
 
         public void StartEnumeration()
@@ -200,6 +202,7 @@ namespace SharpHound
                     }
 
                     string ObjectSID;
+                    string ObjectType;
                     ConvertSidToStringSid(data.lgrmi2_sid, out ObjectSID);
 
                     if (ObjectSID.StartsWith(MachineSID))
@@ -212,12 +215,15 @@ namespace SharpHound
                     {
                         case (SID_NAME_USE.SidTypeUser):
                             db.FindUserBySID(ObjectSID, out obj);
+                            ObjectType = "user";
                             break;
                         case (SID_NAME_USE.SidTypeComputer):
                             db.FindComputerBySID(ObjectSID, out obj);
+                            ObjectType = "computer";
                             break;
                         case (SID_NAME_USE.SidTypeGroup):
                             db.FindGroupBySID(ObjectSID, out obj);
+                            ObjectType = "group";
                             break;
                         default:
                             obj = null;

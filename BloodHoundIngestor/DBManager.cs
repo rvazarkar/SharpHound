@@ -52,6 +52,17 @@ namespace SharpHound
             db = new LiteDatabase(file);
         }
 
+        public void UpdateDBMap()
+        {
+            var domains = db.GetCollection<DomainDB>("domains");
+
+            foreach (DomainDB d in domains.FindAll())
+            {
+                Helpers.DomainMap.TryAdd(d.DomainDNSName, d.DomainShortName);
+                Helpers.DomainMap.TryAdd(d.DomainShortName, d.DomainDNSName);
+            }
+        }
+
         public bool ContainsSid(string sid)
         {
             var users = db.GetCollection<User>("users");
@@ -229,6 +240,11 @@ namespace SharpHound
         public LiteCollection<Group> GetGroups()
         {
             return db.GetCollection<Group>("groups");
-        }        
+        }
+        
+        public LiteCollection<DomainDB> GetDomains()
+        {
+            return db.GetCollection<DomainDB>("domains");
+        }
     }
 }

@@ -1,98 +1,61 @@
 ﻿using SharpHound.BaseClasses;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.DirectoryServices.ActiveDirectory;
 using System.IO;
+using System.Threading.Tasks;
 
 namespace SharpHound
 {
     class DomainTrustMapping
     {
         private Helpers Helpers;
-        private List<string> SeenDomains;
-        private Stack<Domain> Tracker;
-        private List<DomainTrust> EnumeratedTrusts;
-        private Options options;
+        private Options _options;
+        private DBManager db;
+
 
         public DomainTrustMapping()
         {
             Helpers = Helpers.Instance;
-            options = Helpers.Options;
-            SeenDomains = new List<string>();
-            Tracker = new Stack<Domain>();
-            EnumeratedTrusts = new List<DomainTrust>();
+            _options = Helpers.Options;
+            db = DBManager.Instance;
+        }
+        
+        public void StartEnumeration()
+        {
+            Console.WriteLine("Writing Domain Trusts");
+            BlockingCollection<DomainTrust> output = new BlockingCollection<DomainTrust>();
+            Task writer = CreateWriter(output);
+            foreach (DomainDB d in db.GetDomains().FindAll())
+            {
+                d.Trusts.ForEach(output.Add);
+            }
+
+            output.CompleteAdding();
+            writer.Wait();
+
+            Console.WriteLine("Finished Domain Trusts\n");
         }
 
-        //public void GetDomainTrusts()
-        //{
-        //    Console.WriteLine("Starting Domain Trust Enumeration");
-        //    Domain CurrentDomain;
-            
-        //    CurrentDomain = Helpers.GetDomain();
-            
-        //    if (CurrentDomain == null)
-        //    {
-        //        Console.WriteLine("Bad Domain for GetDomainTrusts");
-        //        return;
-        //    }
-        //    Tracker.Push(Helpers.GetDomain());
-
-        //    while (Tracker.Count > 0)
-        //    {
-        //        CurrentDomain = Tracker.Pop();
-                
-        //        if (SeenDomains.Contains(CurrentDomain.Name))
-        //        {
-        //            continue;
-        //        }
-
-        //        if (CurrentDomain == null)
-        //        {
-        //            continue;
-        //        }
-        //        options.WriteVerbose("Enumerating trusts for " + CurrentDomain.Name);
-        //        SeenDomains.Add(CurrentDomain.Name);
-        //        TrustRelationshipInformationCollection Trusts =  GetNetDomainTrust(CurrentDomain);
-        //        foreach (TrustRelationshipInformation Trust in Trusts)
-        //        {
-        //            DomainTrust dt = new DomainTrust();
-        //            dt.SourceDomain = Trust.SourceName;
-        //            dt.TargetDomain = Trust.TargetName;
-        //            dt.TrustType = Trust.TrustType;
-        //            dt.TrustDirection = Trust.TrustDirection;
-        //            EnumeratedTrusts.Add(dt);
-        //            try
-        //            {
-        //                Domain Tar = Helpers.GetDomain(Trust.TargetName);
-        //                if (Tar != null)
-        //                {
-        //                    Tracker.Push(Tar);
-        //                }
-        //            }
-        //            catch
-        //            {
-        //                options.WriteVerbose("Unable to contact " + Trust.TargetName + " to enumerate trusts.");
-        //            }
-                    
-        //        }
-        //    }
-
-        //    using (StreamWriter writer = new StreamWriter(options.GetFilePath("trusts.csv")))
-        //    {
-        //        writer.WriteLine("SourceDomain,TargetDomain,TrustDirection,TrustType,Transitive");
-        //        foreach (DomainTrust d in EnumeratedTrusts)
-        //        {
-        //            writer.WriteLine(d.ToCSV());
-        //        }
-        //    }
-
-        //    Console.WriteLine("Domain Trust Enumeration Completed");
-        //}
-
-        private TrustRelationshipInformationCollection GetNetDomainTrust(Domain Domain)
+        private Task CreateWriter(BlockingCollection<DomainTrust> output)
         {
-            TrustRelationshipInformationCollection Trusts =  Domain.GetAllTrustRelationships();
-            return Trusts;
+            return Task.Factory.StartNew(() =>
+            {
+                if (_options.URI == null)
+                {
+                    using (StreamWriter writer = new StreamWriter(_options.GetFilePath("trusts.csv")))
+                    {
+                        writer.WriteLine("SourceDomain,TargetDomain,TrustDirection,TrustType,Transitive");
+                        writer.AutoFlush = true;
+                        foreach (DomainTrust info in output.GetConsumingEnumerable())
+                        {
+                            writer.WriteLine(info.ToCSV());
+                        }
+                    }
+                }
+            });
+            
         }
 
     }

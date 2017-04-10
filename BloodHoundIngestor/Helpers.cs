@@ -22,6 +22,8 @@ namespace SharpHound
         private static Options options;
         private static DBManager manager;
 
+        public static ConcurrentDictionary<string, string> DomainMap = new ConcurrentDictionary<string, string>();
+
         public static void CreateInstance(Options cli)
         {
             instance = new Helpers(cli);

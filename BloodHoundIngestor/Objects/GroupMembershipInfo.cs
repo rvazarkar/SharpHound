@@ -10,15 +10,10 @@ namespace SharpHound.Objects
         public string GroupName { get; set; }
         public string AccountName { get; set; }
         public string ObjectType { get; set; }
-
-        public GroupMembershipInfo()
-        {
-
-        }
-
+        
         public string ToCSV()
         {
-            return String.Format("{0},{1},{2}", GroupName, AccountName, ObjectType);
+            return String.Format("{0},{1},{2}", GroupName.ToUpper(), AccountName.ToUpper(), ObjectType.ToLower());
         }
     }
 }

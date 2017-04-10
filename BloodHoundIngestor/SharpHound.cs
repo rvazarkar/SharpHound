@@ -127,18 +127,17 @@ namespace SharpHound
                 ACLEnumeration ACLEnum;
 
                 SidCacheBuilder builder = new SidCacheBuilder();
-                //builder.StartEnumeration();
-                builder.GetDomainsAndTrusts();
+                builder.StartEnumeration();
 
                 switch (options.CollMethod)
                 {
                     case CollectionMethod.Default:
-                        //TrustMapper = new DomainTrustMapping();
-                        //TrustMapper.GetDomainTrusts();
-                        //GroupEnumeration = new DomainGroupEnumeration();
-                        //GroupEnumeration.EnumerateGroupMembership();
-                        //AdminEnumeration = new LocalAdminEnumeration();
-                        //AdminEnumeration.StartEnumeration();
+                        TrustMapper = new DomainTrustMapping();
+                        TrustMapper.StartEnumeration();
+                        GroupEnumeration = new DomainGroupEnumeration();
+                        GroupEnumeration.StartEnumeration();
+                        AdminEnumeration = new LocalAdminEnumeration();
+                        AdminEnumeration.StartEnumeration();
                         //SessionEnum = new SessionEnumeration();
                         //SessionEnum.EnumerateSessions();
                         //GroupEnumeration = new DomainGroupEnumeration();
@@ -150,7 +149,7 @@ namespace SharpHound
                         break;
                     case CollectionMethod.ComputerOnly:
                         AdminEnumeration = new LocalAdminEnumeration();
-                        //AdminEnumeration.EnumerateLocalAdmins();
+                        AdminEnumeration.StartEnumeration();
                         SessionEnum = new SessionEnumeration();
                         SessionEnum.EnumerateSessions();
                         break;
@@ -164,7 +163,7 @@ namespace SharpHound
                         break;
                     case CollectionMethod.LocalGroup:
                         AdminEnumeration = new LocalAdminEnumeration();
-                        //AdminEnumeration.EnumerateLocalAdmins();
+                        AdminEnumeration.StartEnumeration();
                         break;
                     case CollectionMethod.Session:
                         SessionEnum = new SessionEnumeration();

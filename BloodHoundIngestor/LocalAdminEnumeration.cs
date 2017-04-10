@@ -18,49 +18,109 @@ namespace SharpHound
 {
     class LocalAdminEnumeration
     {
-        private Helpers Helpers;
+        private Helpers helpers;
         private Options options;
         private DBManager db;
         private static int count;
         private static int dead;
         private static int total;
+        private static string CurrentDomain;
         private ConcurrentDictionary<string, LocalAdminInfo> unresolved;
 
         public LocalAdminEnumeration()
         {
-            Helpers = Helpers.Instance;
-            options = Helpers.Options;
-            db = Helpers.DBManager;
+            helpers = Helpers.Instance;
+            options = helpers.Options;
+            db = helpers.DBManager;
             unresolved = new ConcurrentDictionary<string, LocalAdminInfo>();
         }
 
         public void StartEnumeration()
         {
-            List<string> Domains = Helpers.GetDomainList();
-
+            List<string> Domains = helpers.GetDomainList();
+            Stopwatch watch = Stopwatch.StartNew();
+            Stopwatch overwatch = Stopwatch.StartNew();
             foreach (string DomainName in Domains)
             {
+                CurrentDomain = DomainName;
                 var computers =
                     db.GetComputers().Find(x => x.Domain.Equals(DomainName));
 
+                total = computers.Count();
                 BlockingCollection<Computer> input = new BlockingCollection<Computer>();
+                BlockingCollection<LocalAdminInfo> output = new BlockingCollection<LocalAdminInfo>();
+
                 LimitedConcurrencyLevelTaskScheduler scheduler = new LimitedConcurrencyLevelTaskScheduler(options.Threads);
                 TaskFactory factory = new TaskFactory(scheduler);
 
-                Task a = CreateConsumer(input, null, factory);
+                List<Task> taskhandles = new List<Task>();
 
+                System.Timers.Timer t = new System.Timers.Timer();
+                t.Elapsed += new System.Timers.ElapsedEventHandler(Timer_Tick);
+
+                t.Interval = options.Interval;
+                t.Enabled = true;
+
+                Task writer = StartWriter(output, options, factory);
+                for (int i = 0; i < options.Threads; i++)
+                {
+                    taskhandles.Add(StartConsumer(input, output, factory));
+                }
+                PrintStatus();
                 foreach (Computer c in computers)
                 {
                     input.Add(c);
                 }
                 input.CompleteAdding();
-                a.Wait();
+                options.WriteVerbose("Waiting for enumeration threads to finish...");
+                Task.WaitAll(taskhandles.ToArray());
+                output.CompleteAdding();
+                options.WriteVerbose("Waiting for writer thread to finish...");
+                writer.Wait();
+                PrintStatus();
+                t.Dispose();
+                Console.WriteLine($"Enumeration for {CurrentDomain} done in {watch.Elapsed}");
+                watch.Reset();
             }
-            
-                
+            Console.WriteLine($"Local Admin Enumeration done in {overwatch.Elapsed}");
+            watch.Stop();
+            overwatch.Stop();
         }
 
-        public Task CreateConsumer(BlockingCollection<Computer> input,BlockingCollection<LocalAdminInfo> output, TaskFactory factory)
+        private void Timer_Tick(object sender, System.Timers.ElapsedEventArgs args)
+        {
+            PrintStatus();
+        }
+
+        private void PrintStatus()
+        {
+            int c = LocalAdminEnumeration.total;
+            int p = LocalAdminEnumeration.count;
+            int d = LocalAdminEnumeration.dead;
+            string progress = $"Local Admin Enumeration for {LocalAdminEnumeration.CurrentDomain} - {count}/{total} ({(float)(((dead+count) / total) * 100)}%) completed. ({count} hosts alive)";
+            Console.WriteLine(progress);
+        }
+
+        private Task StartWriter(BlockingCollection<LocalAdminInfo> output, Options _options, TaskFactory factory)
+        {
+            return factory.StartNew(() =>
+            {
+                if (_options.URI == null)
+                {
+                    using (StreamWriter writer = new StreamWriter(_options.GetFilePath("local_admins.csv")))
+                    {
+                        writer.WriteLine("ComputerName,AccountName,AccountType");
+                        writer.AutoFlush = true;
+                        foreach (LocalAdminInfo info in output.GetConsumingEnumerable())
+                        {
+                            writer.WriteLine(info.ToCSV());
+                        }
+                    }
+                }
+            });
+        }
+
+        public Task StartConsumer(BlockingCollection<Computer> input,BlockingCollection<LocalAdminInfo> output, TaskFactory factory)
         {
             return factory.StartNew(() =>
             {
@@ -78,7 +138,7 @@ namespace SharpHound
 
                     try
                     {
-                        string sid = c.SID.Substring(c.SID.LastIndexOf("-"));
+                        string sid = c.SID.Substring(0,c.SID.LastIndexOf("-"));
                         results = LocalGroupAPI(hostname, "Administrators", sid);
                     }catch (SystemDownException)
                     {
@@ -91,8 +151,9 @@ namespace SharpHound
                         {
                             results = LocalGroupWinNT(hostname, "Administrators");
                         }
-                        catch
+                        catch (Exception e)
                         {
+                            Console.WriteLine(e);
                             Interlocked.Increment(ref dead);
                             continue;
                         }
@@ -103,7 +164,7 @@ namespace SharpHound
                         continue;
                     }
                     Interlocked.Increment(ref count);
-                    results.ForEach(Console.WriteLine);
+                    results.ForEach(output.Add);
                 }
             });
         }
@@ -187,7 +248,6 @@ namespace SharpHound
                 foreach (LOCALGROUP_MEMBERS_INFO_2 data in list)
                 {
                     string ObjectName = data.lgrmi2_domainandname;
-                    Console.WriteLine(ObjectName);
                     if (!ObjectName.Contains("\\"))
                     {
                         continue;
@@ -207,9 +267,9 @@ namespace SharpHound
                     string ObjectSID;
                     string ObjectType;
                     ConvertSidToStringSid(data.lgrmi2_sid, out ObjectSID);
-
                     if (ObjectSID.StartsWith(MachineSID))
                     {
+                        
                         continue;
                     }
 
@@ -230,6 +290,7 @@ namespace SharpHound
                             break;
                         default:
                             obj = null;
+                            ObjectType = null;
                             break;
                     }
                     
@@ -239,25 +300,35 @@ namespace SharpHound
                         try
                         {
                             obj = entry.ConvertToDB();
-                        }catch (COMException)
+                            if (obj == null)
+                            {
+                                continue;
+                            }
+                            db.InsertRecord(obj);
+                        }
+                        catch (COMException)
                         {
                             //We couldn't resolve the object, so fallback to manual determination
-                            
                             string domain = sp[0];
                             string username = sp[1];
-                            obj = new DBObject
+                            Helpers.DomainMap.TryGetValue(domain, out domain);
+                            if (ObjectType == "user" || ObjectType == "group")
                             {
-
-                            };
-                            continue;
+                                obj = new DBObject
+                                {
+                                    BloodHoundDisplayName = $"{username}@{domain}".ToUpper(),
+                                    Type = "user"
+                                };
+                            }
+                            else
+                            {
+                                obj = new DBObject
+                                {
+                                    Type = "computer",
+                                    BloodHoundDisplayName = $"{username.Substring(0, username.Length - 1)}.{domain}"
+                                };
+                            }
                         }
-                        
-
-                        if (obj == null)
-                        {
-                            continue;
-                        }
-                        db.InsertRecord(obj);
                     }
 
                     users.Add(new LocalAdminInfo
@@ -316,42 +387,13 @@ namespace SharpHound
         static extern IntPtr LocalFree(IntPtr hMem);
         #endregion
 
-        private void Timer_Tick(object sender, System.Timers.ElapsedEventArgs args)
-        {
-            PrintStatus();
-        }
-
-        private void PrintStatus()
-        {
-            string tot = EnumerationData.total == 0 ? "unknown" : EnumerationData.total.ToString();
-            Console.WriteLine(string.Format("Objects Enumerated: {0} out of {1}", EnumerationData.done, tot));
-        }
-
-        public class EnumerationData
-        {
-            public static string DomainSID { get; set; }
-            public static ConcurrentQueue<SearchResult> SearchResults;
-            public static ConcurrentQueue<LocalAdminInfo> EnumResults = new ConcurrentQueue<LocalAdminInfo>();
-            public static int live = 0;
-            public static int done = 0;
-            public static int total = 0;
-
-            public static void Reset()
-            {
-                SearchResults = new ConcurrentQueue<SearchResult>();
-                live = 0;
-                done = 0;
-                total = 0;
-            }
-        }
-
         private void EnumerateGPOAdmin(string DomainName)
         {
             string targetsid = "S-1-5-32-544__Members";
 
             Console.WriteLine("Starting GPO Correlation");
 
-            DirectorySearcher gposearcher = Helpers.GetDomainSearcher(DomainName);
+            DirectorySearcher gposearcher = helpers.GetDomainSearcher(DomainName);
             gposearcher.Filter = "(&(objectCategory=groupPolicyContainer)(name=*)(gpcfilesyspath=*))";
             gposearcher.PropertiesToLoad.AddRange(new string[] { "displayname", "name", "gpcfilesyspath" });
 
@@ -422,24 +464,21 @@ namespace SharpHound
                                     {
                                         continue;
                                     }
-                                    string converted = Helpers.ConvertSIDToName(sid);
+                                    string converted = helpers.ConvertSIDToName(sid);
                                     if (converted != null)
                                     {
                                         resolved.Add(converted);
                                     }
                                 }
-                                DirectorySearcher OUSearch = Helpers.GetDomainSearcher(DomainName);
+                                DirectorySearcher OUSearch = helpers.GetDomainSearcher(DomainName);
                                 
                                 OUSearch.Filter = string.Format("(&(objectCategory=organizationalUnit)(name=*)(gplink=*{0}*))", name);
                                 foreach (SearchResult r in OUSearch.FindAll())
                                 {
-                                    DirectorySearcher compsearcher = Helpers.GetDomainSearcher(DomainName, ADSPath: r.GetProp("adspath"));
+                                    DirectorySearcher compsearcher = helpers.GetDomainSearcher(DomainName, ADSPath: r.GetProp("adspath"));
                                     foreach (SearchResult ra in compsearcher.FindAll())
                                     {
-                                        EnumerationData.EnumResults.Enqueue(new LocalAdminInfo
-                                        {
-
-                                        });
+                                        
                                     }
                                 }
                             }
@@ -449,137 +488,6 @@ namespace SharpHound
             });
 
             Console.WriteLine("Done GPO Correlation");
-        }
-
-        //private class Enumerator : EnumeratorBase
-        //{
-        //    public Enumerator(ManualResetEvent doneEvent) : base(doneEvent)
-        //    {
-        //    }
-
-        //    public override void ThreadCallback()
-        //    {
-        //        while (true)
-        //        {
-        //            SearchResult result;
-        //            if (EnumerationData.SearchResults.TryDequeue(out result))
-        //            {
-        //                if (result == null)
-        //                {
-        //                    EnumerationData.SearchResults.Enqueue(result);
-        //                    break;
-        //                }
-        //                try
-        //                {
-        //                    EnumerateResult(result);
-        //                }
-        //                catch (Exception ex)
-        //                {
-        //                    Console.WriteLine(ex);
-        //                }
-
-        //            }
-        //        }
-        //        _doneEvent.Set();
-        //    }
-
-        //    private void EnumerateResult(SearchResult result)
-        //    {
-        //        var y = result.Properties["dnshostname"];
-        //        string hostname = result.GetProp("dnshostname"); ;
-        //        if (hostname == null)
-        //        {
-        //            return;
-        //        }
-
-        //        if (!_helpers.PingHost(hostname))
-        //        {
-        //            Interlocked.Increment(ref EnumerationData.done);
-        //            return;
-        //        }
-
-        //        List<LocalAdminInfo> results = new List<LocalAdminInfo>();
-
-        //        try
-        //        {
-        //            results = LocalGroupAPI(hostname, "Administrators", EnumerationData.DomainSID);
-        //        }catch (SystemDownException)
-        //        {
-        //            Interlocked.Increment(ref EnumerationData.done);
-        //            return;
-        //        }catch (APIFailedException)
-        //        {
-        //            try
-        //            {
-        //                results = LocalGroupWinNT(hostname, "Administrators");
-        //            }
-        //            catch
-        //            {
-        //                Interlocked.Increment(ref EnumerationData.done);
-        //                return;
-        //            }
-        //        }catch (Exception e){
-        //            Console.WriteLine("Exception in local admin enum");
-        //            Console.WriteLine(e);
-        //        }
-        //        Interlocked.Increment(ref EnumerationData.live);
-        //        Interlocked.Increment(ref EnumerationData.done);
-
-        //        foreach (LocalAdminInfo r in results)
-        //        {
-        //            EnumerationData.EnumResults.Enqueue(r);
-        //        }
-        //    }
-        //}
-
-        public class Writer : WriterBase
-        {
-            public Writer() : base()
-            {
-            }
-
-            public override void Write()
-            {
-                if (_options.URI == null)
-                {
-                    using (StreamWriter writer = new StreamWriter(_options.GetFilePath("local_admins.csv")))
-                    {
-                        writer.WriteLine("ComputerName,AccountName,AccountType");
-                        while (true)
-                        {
-                            while (EnumerationData.EnumResults.IsEmpty)
-                            {
-                                Thread.Sleep(100);
-                            }
-
-                            try
-                            {
-                                LocalAdminInfo info;
-
-                                if (EnumerationData.EnumResults.TryDequeue(out info))
-                                {
-                                    if (info == null)
-                                    {
-                                        writer.Flush();
-                                        break;
-                                    }
-                                    writer.WriteLine(info.ToCSV());
-
-                                    _localCount++;
-                                    if (_localCount % 1000 == 0)
-                                    {
-                                        writer.Flush();
-                                    }
-                                }
-                            }
-                            catch
-                            {
-                                continue;
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        }        
     }
 }

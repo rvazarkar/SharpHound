@@ -37,6 +37,10 @@ namespace SharpHound
         {
             List<string> Domains = helpers.GetDomainList();
             
+            foreach (string DomainName in Domains)
+            {
+                GetDomainsAndTrusts(DomainName);
+            }
             
             String[] props = new String[] { "samaccountname", "distinguishedname", "dnshostname", "samaccounttype", "primarygroupid", "memberof", "objectsid", "objectclass", "ntsecuritydescriptor", "serviceprincipalname" };
 
@@ -52,7 +56,15 @@ namespace SharpHound
                     continue;
                 }
                 DidEnumerate = true;
+                Console.WriteLine();
                 Console.WriteLine("Building database for " + DomainName);
+
+                DirectorySearcher searcher = helpers.GetDomainSearcher(Domain: DomainName);
+                if (searcher == null)
+                {
+                    Console.WriteLine($"Unable to contact {DomainName}");
+                    continue;
+                }
 
                 BlockingCollection<DBObject> output = new BlockingCollection<DBObject>();
                 BlockingCollection<SearchResult> input = new BlockingCollection<SearchResult>();
@@ -76,7 +88,6 @@ namespace SharpHound
                     taskhandles.Add(StartConsumer(input, output, factory, DomainName, i));
                 }
 
-                DirectorySearcher searcher = helpers.GetDomainSearcher(DomainName);
                 searcher.Filter = "(|(samAccountType=805306368)(samAccountType=805306369)(samAccountType=268435456)(samAccountType=268435457)(samAccountType=536870912)(samAccountType=536870913))";
                 searcher.PropertiesToLoad.AddRange(props);
 
@@ -87,22 +98,24 @@ namespace SharpHound
 
                 searcher.Dispose();
                 input.CompleteAdding();
+                Console.WriteLine("Waiting for consumers to finish...");
                 Task.WaitAll(taskhandles.ToArray());
                 output.CompleteAdding();
+                Console.WriteLine("Waiting for writer to finish...");
                 WriterTask.Wait();
                 t.Dispose();
-                dbmanager.InsertDomain(new BaseClasses.DomainDB
-                {
-                    DomainDNSName = DomainName,
-                    Completed = true
-                });
                 Console.WriteLine("Built database for " + DomainName + " in " + watch.Elapsed);
+                DomainDB domain;
+                dbmanager.GetDomain(DomainName, out domain);
+                domain.Completed = true;
+                dbmanager.InsertDomain(domain);
                 watch.Reset();
             }
             if (DidEnumerate)
             {
-                Console.WriteLine("Finished database building in " + overwatch.Elapsed);
+                Console.WriteLine($"Finished database building in {overwatch.Elapsed}\n");
             }
+            dbmanager.UpdateDBMap();
             overwatch.Stop();
             watch.Stop();
         }
@@ -169,13 +182,23 @@ namespace SharpHound
             });
         }
 
-        public void GetDomainsAndTrusts()
+        public void GetDomainsAndTrusts(string DomainName)
         {
+            if (dbmanager.IsDomainCompleted(DomainName) && !options.Rebuild)
+            {
+                return;
+            }
+            Console.WriteLine($"Building Domain Trust Data for {DomainName}");
             List<string> enumerated = new List<string>();
             Queue<string> ToEnum = new Queue<string>();
 
             //Get our current domain's info
-            string current = Domain.GetCurrentDomain().Name;
+            Domain domain = helpers.GetDomain(DomainName);
+            if (domain == null)
+            {
+                return;
+            }
+            string current = domain.Name;
             ToEnum.Enqueue(current);
             //Convert the DNS name to the NetBIOS name
             IntPtr pDCI = IntPtr.Zero;
@@ -251,6 +274,7 @@ namespace SharpHound
                         ConvertSidToStringSid(t.DomainSid, out s);
                         tempdomain.DomainSid = s;
                         tempdomain.Completed = false;
+                        tempdomain.Trusts = new List<DomainTrust>();
                         dbmanager.InsertDomain(tempdomain);
 
                         DomainTrust temptrust = new DomainTrust();
@@ -285,6 +309,7 @@ namespace SharpHound
                         }
                         
                         temptrust.IsTransitive = !((trust_attrib & TRUST_ATTRIB.NON_TRANSITIVE) == TRUST_ATTRIB.NON_TRANSITIVE);
+                        temptrust.SourceDomain = dns;
                         trusts.Add(temptrust);
                         if (!d.Contains(dns))
                         {

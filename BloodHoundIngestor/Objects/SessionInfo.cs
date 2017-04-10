@@ -13,7 +13,7 @@ namespace SharpHound.Objects
 
         public string ToCSV()
         {
-            return String.Format("{0},{1},{2}", UserName, ComputerName, Weight);
+            return String.Format("{0},{1},{2}", UserName.ToUpper(), ComputerName.ToUpper(), Weight);
         }
     }
 }

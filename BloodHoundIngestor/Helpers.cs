@@ -72,8 +72,6 @@ namespace SharpHound
             Domain TargetDomain = GetDomain(Domain);
             if (TargetDomain == null)
             {
-                Console.WriteLine("Failed to get a domain. Exiting.");
-                Environment.Exit(0);
                 return null;
             }
 

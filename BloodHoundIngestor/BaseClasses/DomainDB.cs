@@ -6,12 +6,15 @@ using System.Text;
 
 namespace SharpHound.BaseClasses
 {
-    class Domain : DBObject
+    public class DomainDB
     {
-        [BsonIndex, BsonId]
+        [BsonIndex]
         public string DomainShortName { get; set; }
+        [BsonIndex, BsonId]
         public string DomainDNSName { get; set; }
-        public bool Completed { get; set; }
+        [BsonIndex]
         public string DomainSid { get; set; }
+        public bool Completed { get; set; }
+        public List<DomainTrust> Trusts { get; set; }
     }
 }

@@ -146,8 +146,8 @@ namespace SharpHound
 
         public bool IsDomainCompleted(string Domain)
         {
-            var domains = db.GetCollection<Domain>("domains");
-            Domain d = domains.FindOne(x => x.DomainDNSName.Equals(Domain));
+            var domains = db.GetCollection<DomainDB>("domains");
+            DomainDB d = domains.FindOne(x => x.DomainDNSName.Equals(Domain));
             if (d == null || !d.Completed)
             {
                 return false;
@@ -156,7 +156,28 @@ namespace SharpHound
             {
                 return true;
             }
+        }
 
+        public bool GetDomain(string search, out DomainDB obj)
+        {
+            var domains = db.GetCollection<DomainDB>("domains");
+            obj = domains.FindOne(x => x.DomainDNSName.Equals(search) || x.DomainShortName.Equals(search) || x.DomainSid.Equals(search));
+
+            if (obj == null)
+            {
+                return false;
+            }
+            else
+            {
+                return true;
+            }
+        }
+
+        public void InsertDomain(DomainDB domain)
+        {
+            var domains = db.GetCollection<DomainDB>("domains");
+
+            domains.Upsert(domain);
         }
 
         public void InsertRecord(DBObject record)
@@ -164,7 +185,6 @@ namespace SharpHound
             var users = db.GetCollection<User>("users");
             var groups = db.GetCollection<Group>("groups");
             var computers = db.GetCollection<Computer>("computers");
-            var domains = db.GetCollection<Domain>("domains");
             
             if (record.GetType().Equals(typeof(User)))
             {
@@ -177,9 +197,6 @@ namespace SharpHound
             else if (record.GetType().Equals(typeof(Computer)))
             {
                 computers.Upsert(record as Computer);
-            }else if (record.GetType().Equals(typeof(Domain)))
-            {
-                domains.Upsert(record as Domain);
             }
             
         }

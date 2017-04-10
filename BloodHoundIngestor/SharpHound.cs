@@ -146,7 +146,7 @@ namespace SharpHound
                         break;
                     case CollectionMethod.Trusts:
                         TrustMapper = new DomainTrustMapping();
-                        TrustMapper.GetDomainTrusts();
+                        //TrustMapper.GetDomainTrusts();
                         break;
                     case CollectionMethod.ComputerOnly:
                         AdminEnumeration = new LocalAdminEnumeration();

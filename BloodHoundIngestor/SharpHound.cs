@@ -127,7 +127,8 @@ namespace SharpHound
                 ACLEnumeration ACLEnum;
 
                 SidCacheBuilder builder = new SidCacheBuilder();
-                builder.StartEnumeration();
+                //builder.StartEnumeration();
+                builder.GetDomainsAndTrusts();
 
                 switch (options.CollMethod)
                 {
@@ -136,12 +137,12 @@ namespace SharpHound
                         //TrustMapper.GetDomainTrusts();
                         //GroupEnumeration = new DomainGroupEnumeration();
                         //GroupEnumeration.EnumerateGroupMembership();
-                        AdminEnumeration = new LocalAdminEnumeration();
-                        AdminEnumeration.StartEnumeration();
+                        //AdminEnumeration = new LocalAdminEnumeration();
+                        //AdminEnumeration.StartEnumeration();
                         //SessionEnum = new SessionEnumeration();
                         //SessionEnum.EnumerateSessions();
-                        GroupEnumeration = new DomainGroupEnumeration();
-                        GroupEnumeration.StartEnumeration();
+                        //GroupEnumeration = new DomainGroupEnumeration();
+                        //GroupEnumeration.StartEnumeration();
                         break;
                     case CollectionMethod.Trusts:
                         TrustMapper = new DomainTrustMapping();

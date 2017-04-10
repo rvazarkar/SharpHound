@@ -192,7 +192,10 @@ namespace SharpHound
                     {
                         continue;
                     }
-                    if (ObjectName.Split('\\')[1].Equals(""))
+
+                    string[] sp = ObjectName.Split('\\');
+
+                    if (sp[1].Equals(""))
                     {
                         continue;
                     }
@@ -238,6 +241,14 @@ namespace SharpHound
                             obj = entry.ConvertToDB();
                         }catch (COMException)
                         {
+                            //We couldn't resolve the object, so fallback to manual determination
+                            
+                            string domain = sp[0];
+                            string username = sp[1];
+                            obj = new DBObject
+                            {
+
+                            };
                             continue;
                         }
                         
@@ -304,70 +315,6 @@ namespace SharpHound
         [DllImport("kernel32.dll", SetLastError = true)]
         static extern IntPtr LocalFree(IntPtr hMem);
         #endregion
-
-        //public void EnumerateLocalAdmins()
-        //{
-        //    Console.WriteLine("Starting Local Admin Enumeration");
-        //    List<string> Domains = Helpers.GetDomainList();
-
-        //    Writer w = new Writer();
-        //    Thread write = new Thread(unused => w.Write());
-        //    write.Start();
-
-        //    Stopwatch watch = Stopwatch.StartNew();
-        //    foreach (String DomainName in Domains)
-        //    {
-        //        EnumerationData.Reset();
-        //        EnumerationData.DomainSID = Helpers.GetDomainSid(DomainName);
-
-        //        if (options.Stealth)
-        //        {
-        //            EnumerateGPOAdmin(DomainName);
-        //        }else
-        //        {
-        //            ManualResetEvent[] doneEvents = new ManualResetEvent[options.Threads];
-        //            for (int i = 0; i < options.Threads; i++)
-        //            {
-        //                doneEvents[i] = new ManualResetEvent(false);
-        //                Enumerator e = new Enumerator(doneEvents[i]);
-        //                Thread consumer = new Thread(unused => e.ThreadCallback());
-        //                consumer.Start();
-        //            }
-
-        //            System.Timers.Timer t = new System.Timers.Timer();
-        //            t.Elapsed += new System.Timers.ElapsedEventHandler(Timer_Tick);
-
-        //            t.Interval = options.Interval;
-        //            t.Enabled = true;
-
-        //            PrintStatus();
-
-        //            int lTotal = 0;
-
-        //            DirectorySearcher searcher = Helpers.GetDomainSearcher(DomainName);
-        //            searcher.Filter = "(sAMAccountType=805306369)";
-        //            searcher.PropertiesToLoad.Add("dnshostname");
-        //            foreach (SearchResult x in searcher.FindAll())
-        //            {
-        //                EnumerationData.SearchResults.Enqueue(x);
-        //                lTotal += 1;
-        //            }
-        //            searcher.Dispose();
-
-        //            EnumerationData.total = lTotal;
-        //            EnumerationData.SearchResults.Enqueue(null);
-
-        //            WaitHandle.WaitAll(doneEvents);
-        //            t.Dispose();
-        //        }
-                
-        //        Console.WriteLine(String.Format("Done local admin enumeration for domain {0} with {1} successful hosts out of {2} queried", DomainName, EnumerationData.live, EnumerationData.done));
-        //    }
-        //    watch.Stop();
-        //    Console.WriteLine("Completed Local Admin Enumeration in " + watch.Elapsed);
-        //    EnumerationData.EnumResults.Enqueue(null);
-        //    write.Join();
-        //}
 
         private void Timer_Tick(object sender, System.Timers.ElapsedEventArgs args)
         {

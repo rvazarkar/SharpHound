@@ -147,7 +147,7 @@ namespace SharpHound
         public bool IsDomainCompleted(string Domain)
         {
             var domains = db.GetCollection<Domain>("domains");
-            Domain d = domains.FindOne(x => x.DomainName.Equals(Domain));
+            Domain d = domains.FindOne(x => x.DomainDNSName.Equals(Domain));
             if (d == null || !d.Completed)
             {
                 return false;

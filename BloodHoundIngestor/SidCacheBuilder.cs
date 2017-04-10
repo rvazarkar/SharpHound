@@ -9,6 +9,7 @@ using System.DirectoryServices;
 using System.DirectoryServices.ActiveDirectory;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Text;
 using System.Threading;
@@ -52,7 +53,7 @@ namespace SharpHound
                 Console.WriteLine("Building database for " + DomainName);
                 dbmanager.InsertRecord(new BaseClasses.Domain
                 {
-                    DomainName = DomainName,
+                    DomainDNSName = DomainName,
                     Completed = false
                 });
 
@@ -95,7 +96,7 @@ namespace SharpHound
                 t.Dispose();
                 dbmanager.InsertRecord(new BaseClasses.Domain
                 {
-                    DomainName = DomainName,
+                    DomainDNSName = DomainName,
                     Completed = true
                 });
                 Console.WriteLine("Built database for " + DomainName + " in " + watch.Elapsed);
@@ -163,17 +164,83 @@ namespace SharpHound
            string DomainName, int num)
         {
             return factory.StartNew(() =>
-            {
-                string[] groups = new string[] { "268435456", "268435457", "536870912", "536870913" };
-                string[] computers = new string[] { "805306369" };
-                string[] users = new string[] { "805306368" };
-                System.Text.RegularExpressions.Regex re = new System.Text.RegularExpressions.Regex(@"HOST\/([A-Za-z0-9-_]*\.[A-Za-z0-9-_]*\.[A-Za-z0-9-_]*)$");
-
+            {                
                 foreach (SearchResult r in input.GetConsumingEnumerable())
                 {
                     output.Add(r.ConvertToDB());
                 }
             });
         }
+
+        public void GetDomainsAndTrusts()
+        {
+            IntPtr ptr = IntPtr.Zero;
+            uint types = 63;
+            uint domaincount = 0;
+            Type DDT = typeof(DS_DOMAIN_TRUSTS);
+
+            List<string> enumerated = new List<string>();
+            Queue<string> ToEnum = new Queue<string>();
+
+            string current = helpers.GetDomain().Name;
+            
+            Console.WriteLine("DT");
+
+            uint result = DsEnumerateDomainTrusts(null, types, out ptr, out domaincount);
+
+            if (result == 0)
+            {
+                IntPtr iter = ptr;
+                List<DS_DOMAIN_TRUSTS> domains = new List<DS_DOMAIN_TRUSTS>();
+                for (int i = 0; i < domaincount; i++)
+                {
+                    DS_DOMAIN_TRUSTS t = (DS_DOMAIN_TRUSTS) Marshal.PtrToStructure(iter, DDT);
+
+                    iter = (IntPtr)(iter.ToInt64() + Marshal.SizeOf(DDT));
+                    Console.WriteLine(t.DnsDomainName);
+                    Console.WriteLine(t.NetbiosDomainName);
+                    
+                    domains.Add(t);
+                }
+            }
+        }
+
+        #region PINVOKE
+        [Flags]
+        private enum DS_DOMAIN_TRUST_TYPE : uint
+        {
+            DS_DOMAIN_IN_FOREST = 0x0001,  // Domain is a member of the forest
+            DS_DOMAIN_DIRECT_OUTBOUND = 0x0002,  // Domain is directly trusted
+            DS_DOMAIN_TREE_ROOT = 0x0004,  // Domain is root of a tree in the forest
+            DS_DOMAIN_PRIMARY = 0x0008,  // Domain is the primary domain of queried server
+            DS_DOMAIN_NATIVE_MODE = 0x0010,  // Primary domain is running in native mode
+            DS_DOMAIN_DIRECT_INBOUND = 0x0020   // Domain is directly trusting
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct DS_DOMAIN_TRUSTS
+        {
+            [MarshalAs(UnmanagedType.LPTStr)]
+            public string NetbiosDomainName;
+            [MarshalAs(UnmanagedType.LPTStr)]
+            public string DnsDomainName;
+            public uint Flags;
+            public uint ParentIndex;
+            public uint TrustType;
+            public uint TrustAttributes;
+            public IntPtr DomainSid;
+            public Guid DomainGuid;
+        }
+        
+        [DllImport("Netapi32.dll", CallingConvention = CallingConvention.Winapi, SetLastError = true, CharSet = CharSet.Auto)]
+        private static extern uint DsEnumerateDomainTrusts(string ServerName,
+                            uint Flags,
+                            out IntPtr Domains,
+                            out uint DomainCount);
+
+        [DllImport("Netapi32.dll", EntryPoint = "NetApiBufferFree")]
+        private static extern uint NetApiBufferFree(IntPtr buffer);
+
+        #endregion
     }
 }

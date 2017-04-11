@@ -64,9 +64,9 @@ namespace ExtensionMethods
 
         public static DBObject ConvertToDB(this SearchResult result, string Domain = null)
         {
-            string[] groups = new string[] { "268435456", "268435457", "536870912", "536870913" };
-            string[] computers = new string[] { "805306369" };
-            string[] users = new string[] { "805306368" };
+            string[] groups = { "268435456", "268435457", "536870912", "536870913" };
+            string[] computers = { "805306369" };
+            string[] users = { "805306368" };
             System.Text.RegularExpressions.Regex re = new System.Text.RegularExpressions.Regex(@"HOST\/([A-Za-z0-9-_]*\.[A-Za-z0-9-_]*\.[A-Za-z0-9-_]*)$");
 
             byte[] sidbytes = result.GetPropBytes("objectsid");
@@ -201,9 +201,9 @@ namespace ExtensionMethods
 
         public static DBObject ConvertToDB(this DirectoryEntry result, string Domain = null)
         {
-            string[] groups = new string[] { "268435456", "268435457", "536870912", "536870913" };
-            string[] computers = new string[] { "805306369" };
-            string[] users = new string[] { "805306368" };
+            string[] groups = { "268435456", "268435457", "536870912", "536870913" };
+            string[] computers = { "805306369" };
+            string[] users = { "805306368" };
             System.Text.RegularExpressions.Regex re = new System.Text.RegularExpressions.Regex(@"HOST\/([A-Za-z0-9-_]*\.[A-Za-z0-9-_]*\.[A-Za-z0-9-_]*)$");
 
             byte[] sidbytes = result.GetPropBytes("objectsid");
@@ -255,7 +255,10 @@ namespace ExtensionMethods
                     SAMAccountName = san,
                     ServicePrincipalName = result.GetPropArray("serviceprincipalname"),
                     SID = sidstring,
-                    Type = "user"
+                    Type = "user",
+                    HomeDirectory = result.GetProp("homedirectory"),
+                    ProfilePath = result.GetProp("profilepath"),
+                    ScriptPath = result.GetProp("scriptpath")
                 };
             }
             else

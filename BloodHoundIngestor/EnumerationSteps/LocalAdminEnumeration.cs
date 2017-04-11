@@ -22,41 +22,42 @@ namespace SharpHound.EnumerationSteps
     {
         private Helpers helpers;
         private Options options;
-        private DBManager db;
+        private DBManager manager;
+
         private static int count;
         private static int dead;
         private static int total;
         private static string CurrentDomain;
-        private ConcurrentDictionary<string, LocalAdminInfo> unresolved;
 
         public LocalAdminEnumeration()
         {
             helpers = Helpers.Instance;
             options = helpers.Options;
-            db = helpers.DBManager;
-            unresolved = new ConcurrentDictionary<string, LocalAdminInfo>();
+            manager = DBManager.Instance;
         }
 
         public void StartEnumeration()
         {
+            Console.WriteLine("\nStarting Local Admin Enumeration");
             List<string> Domains = helpers.GetDomainList();
             Stopwatch watch = Stopwatch.StartNew();
             Stopwatch overwatch = Stopwatch.StartNew();
             foreach (string DomainName in Domains)
             {
+                Console.WriteLine($"Started local admin enumeration for {DomainName}");
                 CurrentDomain = DomainName;
 
                 if (options.Stealth)
                 {
                     BlockingCollection<LocalAdminInfo> coll = new BlockingCollection<LocalAdminInfo>();
-                    Task gpowriter = StartWriter(coll, options, Task.Factory);
+                    Task gpowriter = StartWriter(coll, Task.Factory);
                     EnumerateGPOAdmin(DomainName, coll);
                     gpowriter.Wait();
                     continue;
                 }
 
                 var computers =
-                    db.GetComputers().Find(x => x.Domain.Equals(DomainName));
+                    manager.GetComputers().Find(x => x.Domain.Equals(DomainName));
 
                 total = computers.Count();
                 BlockingCollection<Computer> input = new BlockingCollection<Computer>();
@@ -73,7 +74,7 @@ namespace SharpHound.EnumerationSteps
                 t.Interval = options.Interval;
                 t.Enabled = true;
 
-                Task writer = StartWriter(output, options, factory);
+                Task writer = StartWriter(output, factory);
                 for (int i = 0; i < options.Threads; i++)
                 {
                     taskhandles.Add(StartConsumer(input, output, factory));
@@ -113,13 +114,13 @@ namespace SharpHound.EnumerationSteps
             Console.WriteLine(progress);
         }
 
-        private Task StartWriter(BlockingCollection<LocalAdminInfo> output, Options _options, TaskFactory factory)
+        private Task StartWriter(BlockingCollection<LocalAdminInfo> output, TaskFactory factory)
         {
             return factory.StartNew(() =>
             {
-                if (_options.URI == null)
+                if (options.URI == null)
                 {
-                    using (StreamWriter writer = new StreamWriter(_options.GetFilePath("local_admins.csv")))
+                    using (StreamWriter writer = new StreamWriter(options.GetFilePath("local_admins.csv")))
                     {
                         writer.WriteLine("ComputerName,AccountName,AccountType");
                         writer.AutoFlush = true;
@@ -144,13 +145,14 @@ namespace SharpHound.EnumerationSteps
                     {
                         _helper.Options.WriteVerbose($"{hostname} did not respond to ping");
                         Interlocked.Increment(ref dead);
+                        continue;
                     }
 
                     List<LocalAdminInfo> results;
 
                     try
                     {
-                        string sid = c.SID.Substring(0,c.SID.LastIndexOf("-"));
+                        string sid = c.SID.Substring(0, c.SID.LastIndexOf("-", StringComparison.CurrentCulture));
                         results = LocalGroupAPI(hostname, "Administrators", sid);
                     }catch (SystemDownException)
                     {
@@ -182,9 +184,9 @@ namespace SharpHound.EnumerationSteps
         }
 
         #region Helpers
-        private List<LocalAdminInfo> LocalGroupWinNT(string Target, string Group)
+        private List<LocalAdminInfo> LocalGroupWinNT(string Target, string group)
         {
-            DirectoryEntry members = new DirectoryEntry($"WinNT://{Target}/{Group},group");
+            DirectoryEntry members = new DirectoryEntry($"WinNT://{Target}/{group},group");
             List<LocalAdminInfo> users = new List<LocalAdminInfo>();
             string servername = Target.Split('.')[0].ToUpper();
             foreach (object member in (System.Collections.IEnumerable)members.Invoke("Members"))
@@ -193,8 +195,7 @@ namespace SharpHound.EnumerationSteps
                 {
                     byte[] sid = m.GetPropBytes("objectsid");
                     string sidstring = new SecurityIdentifier(sid, 0).ToString();
-                    DBObject obj;
-                    if (db.FindBySID(sidstring, out obj))
+                    if (manager.FindBySID(sidstring, out DBObject obj))
                     {
                         users.Add(new LocalAdminInfo
                         {
@@ -209,12 +210,10 @@ namespace SharpHound.EnumerationSteps
             return users;
         }
 
-        private List<LocalAdminInfo> LocalGroupAPI(string Target, string Group, string DomainSID)
+        private List<LocalAdminInfo> LocalGroupAPI(string Target, string group, string DomainSID)
         {
             int QueryLevel = 2;
             IntPtr PtrInfo = IntPtr.Zero;
-            int EntriesRead = 0;
-            int TotalRead = 0;
             IntPtr ResumeHandle = IntPtr.Zero;
             string MachineSID = "DUMMYSTRING";
 
@@ -222,7 +221,7 @@ namespace SharpHound.EnumerationSteps
 
             List<LocalAdminInfo> users = new List<LocalAdminInfo>();
 
-            int val = NetLocalGroupGetMembers(Target, Group, QueryLevel, out PtrInfo, -1, out EntriesRead, out TotalRead, ResumeHandle);
+            int val = NetLocalGroupGetMembers(Target, group, QueryLevel, out PtrInfo, -1, out int EntriesRead, out int TotalRead, ResumeHandle);
             if (val == 1722)
             {
                 throw new SystemDownException();
@@ -248,11 +247,14 @@ namespace SharpHound.EnumerationSteps
 
                 foreach (LOCALGROUP_MEMBERS_INFO_2 data in list)
                 {
-                    string s;
-                    ConvertSidToStringSid(data.lgrmi2_sid, out s);
-                    if (s.EndsWith("-500") && !(s.StartsWith(DomainSID)))
+                    ConvertSidToStringSid(data.lgrmi2_sid, out string s);
+                    if (s == null)
                     {
-                        MachineSID = s.Substring(0, s.LastIndexOf("-"));
+                        continue;
+                    }
+                    if (s.EndsWith("-500", StringComparison.CurrentCulture) && !(s.StartsWith(DomainSID, StringComparison.CurrentCulture)))
+                    {
+                        MachineSID = s.Substring(0, s.LastIndexOf("-", StringComparison.CurrentCulture));
                         break;
                     }
                 }
@@ -271,17 +273,15 @@ namespace SharpHound.EnumerationSteps
                     {
                         continue;
                     }
-                    if (ObjectName.StartsWith("NT Authority"))
+                    if (ObjectName.StartsWith("NT Authority", StringComparison.CurrentCulture))
                     {
                         continue;
                     }
 
-                    string ObjectSID;
                     string ObjectType;
-                    ConvertSidToStringSid(data.lgrmi2_sid, out ObjectSID);
-                    if (ObjectSID.StartsWith(MachineSID))
+                    ConvertSidToStringSid(data.lgrmi2_sid, out string ObjectSID);
+                    if (ObjectSID == null ||  ObjectSID.StartsWith(MachineSID, StringComparison.CurrentCulture))
                     {
-                        
                         continue;
                     }
 
@@ -289,15 +289,15 @@ namespace SharpHound.EnumerationSteps
                     switch (data.lgrmi2_sidusage)
                     {
                         case (SID_NAME_USE.SidTypeUser):
-                            db.FindUserBySID(ObjectSID, out obj);
+                            manager.FindUserBySID(ObjectSID, out obj);
                             ObjectType = "user";
                             break;
                         case (SID_NAME_USE.SidTypeComputer):
-                            db.FindComputerBySID(ObjectSID, out obj);
+                            manager.FindComputerBySID(ObjectSID, out obj);
                             ObjectType = "computer";
                             break;
                         case (SID_NAME_USE.SidTypeGroup):
-                            db.FindGroupBySID(ObjectSID, out obj);
+                            manager.FindGroupBySID(ObjectSID, out obj);
                             ObjectType = "group";
                             break;
                         default:
@@ -316,7 +316,7 @@ namespace SharpHound.EnumerationSteps
                             {
                                 continue;
                             }
-                            db.InsertRecord(obj);
+                            manager.InsertRecord(obj);
                         }
                         catch (COMException)
                         {
@@ -368,7 +368,7 @@ namespace SharpHound.EnumerationSteps
             IntPtr resume_handle);
 
         [DllImport("Netapi32.dll", SetLastError = true)]
-        static extern int NetApiBufferFree(IntPtr Buffer);
+        static extern int NetApiBufferFree(IntPtr buff);
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
         public struct LOCALGROUP_MEMBERS_INFO_2
@@ -457,7 +457,7 @@ namespace SharpHound.EnumerationSteps
                                     m = m.Trim('*');
 
                                     string sid;
-                                    if (!m.StartsWith("S-1-"))
+                                    if (!m.StartsWith("S-1-", StringComparison.CurrentCulture))
                                     {
                                         try
                                         {
@@ -479,8 +479,7 @@ namespace SharpHound.EnumerationSteps
 
                                     string user = null;
 
-                                    DBObject obj;
-                                    if (db.FindBySID(sid,out obj))
+                                    if (manager.FindBySID(sid, out DBObject obj))
                                     {
                                         user = obj.BloodHoundDisplayName;
                                     }
@@ -490,7 +489,7 @@ namespace SharpHound.EnumerationSteps
                                         {
                                             DirectoryEntry entry = new DirectoryEntry($"LDAP://<SID={sid}");
                                             obj = entry.ConvertToDB();
-                                            db.InsertRecord(obj);
+                                            manager.InsertRecord(obj);
                                         }
                                         catch
                                         {

@@ -27,7 +27,7 @@ namespace SharpHound
         public LimitedConcurrencyLevelTaskScheduler(int maxDegreeOfParallelism)
         {
             if (maxDegreeOfParallelism < 1) throw new ArgumentOutOfRangeException("maxDegreeOfParallelism");
-            _maxDegreeOfParallelism = maxDegreeOfParallelism;
+            _maxDegreeOfParallelism = maxDegreeOfParallelism + 1;
         }
 
         /// <summary>Queues a task to the scheduler.</summary>

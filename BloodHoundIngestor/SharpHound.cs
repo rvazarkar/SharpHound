@@ -1,5 +1,6 @@
 ﻿using CommandLine;
 using CommandLine.Text;
+using SharpHound.EnumerationSteps;
 using System;
 using System.DirectoryServices.ActiveDirectory;
 using System.IO;
@@ -138,20 +139,18 @@ namespace SharpHound
                         GroupEnumeration.StartEnumeration();
                         AdminEnumeration = new LocalAdminEnumeration();
                         AdminEnumeration.StartEnumeration();
-                        //SessionEnum = new SessionEnumeration();
-                        //SessionEnum.EnumerateSessions();
-                        //GroupEnumeration = new DomainGroupEnumeration();
-                        //GroupEnumeration.StartEnumeration();
+                        SessionEnum = new SessionEnumeration();
+                        SessionEnum.StartEnumeration();
                         break;
                     case CollectionMethod.Trusts:
                         TrustMapper = new DomainTrustMapping();
-                        //TrustMapper.GetDomainTrusts();
+                        TrustMapper.StartEnumeration();
                         break;
                     case CollectionMethod.ComputerOnly:
                         AdminEnumeration = new LocalAdminEnumeration();
                         AdminEnumeration.StartEnumeration();
                         SessionEnum = new SessionEnumeration();
-                        SessionEnum.EnumerateSessions();
+                        SessionEnum.StartEnumeration();
                         break;
                     case CollectionMethod.Group:
                         GroupEnumeration = new DomainGroupEnumeration();
@@ -159,7 +158,7 @@ namespace SharpHound
                         break;
                     case CollectionMethod.LoggedOn:
                         SessionEnum = new SessionEnumeration();
-                        SessionEnum.EnumerateSessions();
+                        SessionEnum.StartEnumeration();
                         break;
                     case CollectionMethod.LocalGroup:
                         AdminEnumeration = new LocalAdminEnumeration();
@@ -167,7 +166,7 @@ namespace SharpHound
                         break;
                     case CollectionMethod.Session:
                         SessionEnum = new SessionEnumeration();
-                        SessionEnum.EnumerateSessions();
+                        SessionEnum.StartEnumeration();
                         break;
                     case CollectionMethod.ACL:
                         ACLEnum = new ACLEnumeration();

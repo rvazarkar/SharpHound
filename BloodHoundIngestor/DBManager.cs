@@ -165,6 +165,13 @@ namespace SharpHound
             }
         }
 
+        public bool GetGCMap(string username, out GlobalCatalogMap obj)
+        {
+            var gc = db.GetCollection<GlobalCatalogMap>("globalcatalog");
+            obj = gc.FindOne(x => x.Username.Equals(username));
+            return obj != null;
+        }
+
         public bool GetDomain(string search, out DomainDB obj)
         {
             var domains = db.GetCollection<DomainDB>("domains");
@@ -178,6 +185,12 @@ namespace SharpHound
             {
                 return true;
             }
+        }
+
+        public void InsertGCObject(GlobalCatalogMap obj)
+        {
+            var gc = db.GetCollection<GlobalCatalogMap>("globalcatalog");
+            gc.Upsert(obj);
         }
 
         public void InsertDomain(DomainDB domain)

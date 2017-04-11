@@ -23,8 +23,8 @@ namespace SharpHound.EnumerationSteps
         private Helpers helpers;
         private Options options;
         DBManager dbmanager;
-        public static int last = 0;
-        public static int count = 0;
+        public static int last;
+        public static int count;
         Stopwatch watch = Stopwatch.StartNew();
 
         public SidCacheBuilder()
@@ -43,7 +43,7 @@ namespace SharpHound.EnumerationSteps
                 GetDomainsAndTrusts(DomainName);
             }
             
-            String[] props = new String[] { "samaccountname", "distinguishedname", "dnshostname", "samaccounttype", "primarygroupid", "memberof", "objectsid", "objectclass", "ntsecuritydescriptor", "serviceprincipalname" };
+            String[] props = { "samaccountname", "distinguishedname", "dnshostname", "samaccounttype", "primarygroupid", "memberof", "objectsid", "objectclass", "ntsecuritydescriptor", "serviceprincipalname", "homedirectory","scriptpath","profilepath" };
 
             Stopwatch watch = Stopwatch.StartNew();
             Stopwatch overwatch = Stopwatch.StartNew();
@@ -86,7 +86,7 @@ namespace SharpHound.EnumerationSteps
                 
                 for (int i = 0; i < options.Threads; i++)
                 {
-                    taskhandles.Add(StartConsumer(input, output, factory, DomainName, i));
+                    taskhandles.Add(StartConsumer(input, output, factory));
                 }
 
                 searcher.Filter = "(|(samAccountType=805306368)(samAccountType=805306369)(samAccountType=268435456)(samAccountType=268435457)(samAccountType=536870912)(samAccountType=536870913))";
@@ -106,8 +106,7 @@ namespace SharpHound.EnumerationSteps
                 WriterTask.Wait();
                 t.Dispose();
                 Console.WriteLine("Built database for " + DomainName + " in " + watch.Elapsed);
-                DomainDB domain;
-                dbmanager.GetDomain(DomainName, out domain);
+                dbmanager.GetDomain(DomainName, out DomainDB domain);
                 domain.Completed = true;
                 dbmanager.InsertDomain(domain);
                 watch.Reset();
@@ -171,8 +170,7 @@ namespace SharpHound.EnumerationSteps
 
         private static Task StartConsumer(BlockingCollection<SearchResult> input, 
            BlockingCollection<DBObject> output, 
-           TaskFactory factory, 
-           string DomainName, int num)
+           TaskFactory factory)
         {
             return factory.StartNew(() =>
             {                
@@ -209,12 +207,13 @@ namespace SharpHound.EnumerationSteps
             string netbiosname = info.DomainName;
             NetApiBufferFree(pDCI);
 
-            DomainDB temp = new DomainDB();
-            temp.Completed = false;
-            temp.DomainDNSName = current;
-            temp.DomainShortName = netbiosname;
-            temp.DomainSid = Helpers.Instance.GetDomainSid(current);
-
+            DomainDB temp = new DomainDB()
+            {
+                Completed = false,
+                DomainDNSName = current,
+                DomainShortName = netbiosname,
+                DomainSid = Helpers.Instance.GetDomainSid(current)
+            };
             dbmanager.InsertDomain(temp);
             
             while (!(ToEnum.Count == 0))
@@ -239,9 +238,8 @@ namespace SharpHound.EnumerationSteps
 
                 IntPtr ptr = IntPtr.Zero;
                 uint types = 63;
-                uint domaincount = 0;
                 Type DDT = typeof(DS_DOMAIN_TRUSTS);
-                uint result = DsEnumerateDomainTrusts(server, types, out ptr, out domaincount);
+                uint result = DsEnumerateDomainTrusts(server, types, out ptr, out uint domaincount);
                 int error = Marshal.GetLastWin32Error();
 
                 if (result == 0)
@@ -268,19 +266,21 @@ namespace SharpHound.EnumerationSteps
                             continue;
                         }
 
-                        DomainDB tempdomain = new DomainDB();
-                        tempdomain.DomainDNSName = dns;
-                        tempdomain.DomainShortName = netbios;
-                        string s = null;
-                        ConvertSidToStringSid(t.DomainSid, out s);
+                        DomainDB tempdomain = new DomainDB()
+                        {
+                            DomainDNSName = dns,
+                            DomainShortName = netbios
+                        };
+                        ConvertSidToStringSid(t.DomainSid, out string s);
                         tempdomain.DomainSid = s;
                         tempdomain.Completed = false;
                         tempdomain.Trusts = new List<DomainTrust>();
                         dbmanager.InsertDomain(tempdomain);
 
-                        DomainTrust temptrust = new DomainTrust();
-                        temptrust.DomainName = t.DnsDomainName;
-                        
+                        DomainTrust temptrust = new DomainTrust()
+                        {
+                            DomainName = t.DnsDomainName
+                        };
                         bool inbound = false;
                         bool outbound = false;
 

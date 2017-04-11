@@ -20,7 +20,6 @@ namespace SharpHound
         private List<String> DomainList;
 
         private static Options options;
-        private static DBManager manager;
 
         public static ConcurrentDictionary<string, string> DomainMap = new ConcurrentDictionary<string, string>();
 
@@ -28,7 +27,6 @@ namespace SharpHound
         {
             instance = new Helpers(cli);
             DBManager.CreateInstance(options.DBName);
-            manager = DBManager.Instance;
         }
 
         public static Helpers Instance
@@ -47,14 +45,6 @@ namespace SharpHound
             }
         }
 
-        public DBManager DBManager
-        {
-            get
-            {
-                return manager;
-            }
-        }
-
         public Helpers(Options cli)
         {
             DomainResolveCache = new ConcurrentDictionary<string, Domain>();
@@ -66,7 +56,7 @@ namespace SharpHound
 
         public static string DomainFromDN(string dn)
         {
-            return dn.Substring(dn.IndexOf("DC=")).Replace("DC=", "").Replace(",", ".");
+            return dn.Substring(dn.IndexOf("DC=", StringComparison.CurrentCulture)).Replace("DC=", "").Replace(",", ".");
         }
 
         public DirectorySearcher GetDomainSearcher(string Domain = null, string SearchBase = null, string ADSPath = null)
@@ -103,12 +93,13 @@ namespace SharpHound
 
             options.WriteVerbose(String.Format("[GetDomainSearcher] Search String: {0}", SearchString));
 
-            DirectorySearcher Searcher = new DirectorySearcher(new DirectoryEntry(SearchString));
-            Searcher.PageSize = 1000;
-            Searcher.SearchScope = SearchScope.Subtree;
-            Searcher.CacheResults = false;
-            Searcher.ReferralChasing = ReferralChasingOption.All;
-
+            DirectorySearcher Searcher = new DirectorySearcher(new DirectoryEntry(SearchString))
+            {
+                PageSize = 1000,
+                SearchScope = SearchScope.Subtree,
+                CacheResults = false,
+                ReferralChasing = ReferralChasingOption.All
+            };
             return Searcher;
         }
 
@@ -172,11 +163,10 @@ namespace SharpHound
         {
             Domain DomainObject;
             //Check if we've already resolved this domain before. If we have return the cached object
-            string key = Domain == null ? "UNIQUENULLOBJECT" : Domain;
+            string key = Domain ?? "UNIQUENULLOBJECT";
             if (DomainResolveCache.ContainsKey(key))
             {
-                Domain t;
-                DomainResolveCache.TryGetValue(key, out t);
+                DomainResolveCache.TryGetValue(key, out Domain t);
                 return t;
             }
 
@@ -220,8 +210,7 @@ namespace SharpHound
         public string ConvertSIDToName(string cn)
         {
             string TrimmedCN = cn.Trim('*');
-            string result;
-            if (SidConversionCache.TryGetValue(TrimmedCN, out result))
+            if (SidConversionCache.TryGetValue(TrimmedCN, out string result))
             {
                 return result;
             }
@@ -445,11 +434,6 @@ namespace SharpHound
             }
         }
 
-        public void GetOUForGPO(string GPO, string Domain)
-        {
-
-        }
-
         /// <summary>
         /// Checks if a system responds to ping. Returns true if it does.
         /// </summary>
@@ -457,13 +441,12 @@ namespace SharpHound
         /// <returns></returns>
         public bool PingHost(string server)
         {
-            bool val;
             if (options.SkipPing)
             {
                 return true;
             }
 
-            if (PingCache.TryGetValue(server, out val))
+            if (PingCache.TryGetValue(server, out bool val))
             {
                 return val;
             }

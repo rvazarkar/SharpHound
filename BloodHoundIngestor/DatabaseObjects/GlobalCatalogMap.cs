@@ -1,13 +1,12 @@
-﻿using System;
+﻿using LiteDB;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 
 namespace SharpHound.DatabaseObjects
 {
-    class GlobalCatalogMap
+    public class GlobalCatalogMap
     {
+        [BsonId,BsonIndex]
         public string Username { get; set; }
-        public List<string> Domains { get; set; }
+        public List<string> PossibleNames { get; set; }
     }
 }

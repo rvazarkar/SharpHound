@@ -22,7 +22,7 @@ namespace SharpHound.EnumerationSteps
         private Options options;
         private DBManager manager;
 
-        private static int progress = 0;
+        private static int progress;
         private static int totalcount;
         private static string CurrentDomain;
 
@@ -30,16 +30,11 @@ namespace SharpHound.EnumerationSteps
         {
             Helpers = Helpers.Instance;
             options = Helpers.Options;
-            manager = Helpers.DBManager;
+            manager = DBManager.Instance;
         }
 
         public void StartEnumeration()
         {
-            if (options.Stealth)
-            {
-                return;
-            }
-
             Console.WriteLine("\nStarting Group Enumeration");
             List<string> Domains = Helpers.GetDomainList();
             Stopwatch watch = Stopwatch.StartNew();
@@ -151,8 +146,7 @@ namespace SharpHound.EnumerationSteps
                 {
                     foreach (string dn in obj.MemberOf)
                     {
-                        DBObject g;
-                        if (db.FindDistinguishedName(dn, out g))
+                        if (db.FindDistinguishedName(dn, out DBObject g))
                         {
                             output.Add(new GroupMembershipInfo
                             {
@@ -160,7 +154,8 @@ namespace SharpHound.EnumerationSteps
                                 GroupName = g.BloodHoundDisplayName,
                                 ObjectType = obj.Type
                             });
-                        }else if (dnmap.TryGetValue(dn,out g))
+                        }
+                        else if (dnmap.TryGetValue(dn, out g))
                         {
                             output.Add(new GroupMembershipInfo
                             {
@@ -194,7 +189,8 @@ namespace SharpHound.EnumerationSteps
                                 };
 
                                 db.InsertRecord(g);
-                            }catch (DirectoryServicesCOMException)
+                            }
+                            catch (DirectoryServicesCOMException)
                             {
                                 //We couldn't get the real object, so fallback stuff
                                 string DomainName = Helpers.DomainFromDN(dn);
@@ -218,7 +214,7 @@ namespace SharpHound.EnumerationSteps
 
                                 dnmap.TryAdd(dn, g);
                             }
-                            
+
 
                             output.Add(new GroupMembershipInfo
                             {

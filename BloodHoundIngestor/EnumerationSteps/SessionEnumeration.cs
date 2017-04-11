@@ -15,6 +15,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using static SharpHound.Options;
 using ExtensionMethods;
+using SharpHound.OutputObjects;
+using SharpHound.BaseClasses;
 
 namespace SharpHound
 {
@@ -220,12 +222,13 @@ namespace SharpHound
                 {
                     if (!EnumerationData.GCMappings.ContainsKey(username))
                     {
-                        List<string> data = new List<string>();
-                        data.Add(MemberDomain);
+                        List<string> data = new List<string>
+                        {
+                            MemberDomain
+                        };
                         EnumerationData.GCMappings.TryAdd(username, data);
                     }
-                    List<String> mapped;
-                    if (EnumerationData.GCMappings.TryGetValue(username, out mapped))
+                    if (EnumerationData.GCMappings.TryGetValue(username, out List<string> mapped))
                     {
                         if (!mapped.Contains(MemberDomain))
                         {
@@ -359,9 +362,8 @@ namespace SharpHound
 
                             try
                             {
-                                SessionInfo info;
 
-                                if (EnumerationData.EnumResults.TryDequeue(out info))
+                                if (EnumerationData.EnumResults.TryDequeue(out SessionInfo info))
                                 {
                                     if (info == null)
                                     {
@@ -426,8 +428,7 @@ namespace SharpHound
             {
                 while (true)
                 {
-                    string result;
-                    if (EnumerationData.SearchResults.TryDequeue(out result))
+                    if (EnumerationData.SearchResults.TryDequeue(out string result))
                     {
                         if (result == null)
                         {
@@ -454,13 +455,11 @@ namespace SharpHound
 
                 int QueryLevel = 1;
                 IntPtr info = IntPtr.Zero;
-                int EntriesRead = 0;
-                int TotalRead = 0;
                 int ResumeHandle = 0;
 
                 Type tWui1 = typeof(WKSTA_USER_INFO_1);
 
-                int result = NetWkstaUserEnum(server, QueryLevel, out info, -1, out EntriesRead, out TotalRead, ref ResumeHandle);
+                int result = NetWkstaUserEnum(server, QueryLevel, out info, -1, out int EntriesRead, out int TotalRead, ref ResumeHandle);
                 long offset = info.ToInt64();
 
                 if (result == 0 || result == 234)
@@ -554,13 +553,11 @@ namespace SharpHound
                 List<SessionInfo> toReturn = new List<SessionInfo>();
                 IntPtr PtrInfo = IntPtr.Zero;    
                 int val;
-                int EntriesRead = 0;
-                int TotalRead = 0;
                 IntPtr ResumeHandle = IntPtr.Zero;
 
                 Type si10 = typeof(SESSION_INFO_10);
 
-                val = NetSessionEnum(server, null, null, 10, out PtrInfo, -1, out EntriesRead, out TotalRead, ref ResumeHandle);
+                val = NetSessionEnum(server, null, null, 10, out PtrInfo, -1, out int EntriesRead, out int TotalRead, ref ResumeHandle);
 
 
                 SESSION_INFO_10[] results = new SESSION_INFO_10[EntriesRead];
@@ -581,7 +578,6 @@ namespace SharpHound
                 {
                     string username = x.sesi10_username;
                     string cname = x.sesi10_cname;
-                    string dnsname;
 
                     if (cname != null && cname.StartsWith("\\"))
                     {
@@ -592,7 +588,7 @@ namespace SharpHound
                     {
                         try
                         {
-                            if (!EnumerationData.ResolveCache.TryGetValue(cname, out dnsname))
+                            if (!EnumerationData.ResolveCache.TryGetValue(cname, out string dnsname))
                             {
                                 dnsname = System.Net.Dns.GetHostEntry(cname).HostName;
                                 EnumerationData.ResolveCache.TryAdd(cname, dnsname);
@@ -617,8 +613,7 @@ namespace SharpHound
                                 string UserDomain = null;
                                 if (EnumerationData.GCMappings.ContainsKey(username))
                                 {
-                                    List<string> possible;
-                                    if (EnumerationData.GCMappings.TryGetValue(username, out possible))
+                                    if (EnumerationData.GCMappings.TryGetValue(username, out List<string> possible))
                                     {
                                         if (possible.Count == 1)
                                         {
@@ -630,7 +625,8 @@ namespace SharpHound
                                                 UserName = LoggedOnUser,
                                                 Weight = 1
                                             });
-                                        } else
+                                        }
+                                        else
                                         {
                                             foreach (string d in possible)
                                             {
@@ -643,7 +639,8 @@ namespace SharpHound
                                                 });
                                             }
                                         }
-                                    }else
+                                    }
+                                    else
                                     {
                                         // The user isn't in the GC for whatever reason. We'll default to computer domain
                                         string LoggedOnUser = string.Format("{0}@{1}", username.ToUpper(), ComputerDomain);
@@ -654,7 +651,8 @@ namespace SharpHound
                                             Weight = 2
                                         });
                                     }
-                                }else
+                                }
+                                else
                                 {
                                     // The user isn't in the GC for whatever reason. We'll default to computer domain
                                     string LoggedOnUser = string.Format("{0}@{1}", username.ToUpper(), ComputerDomain);
@@ -754,7 +752,7 @@ namespace SharpHound
 
             [DllImport("netapi32.dll")]
             static extern int NetApiBufferFree(
-                IntPtr Buffer);
+                IntPtr Buff);
             #endregion
         }
     }

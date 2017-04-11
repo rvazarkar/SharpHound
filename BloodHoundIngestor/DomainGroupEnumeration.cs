@@ -36,6 +36,11 @@ namespace SharpHound
 
         public void StartEnumeration()
         {
+            if (options.Stealth)
+            {
+                return;
+            }
+
             Console.WriteLine("\nStarting Group Enumeration");
             List<string> Domains = Helpers.GetDomainList();
             Stopwatch watch = Stopwatch.StartNew();

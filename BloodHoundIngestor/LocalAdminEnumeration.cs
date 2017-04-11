@@ -43,6 +43,16 @@ namespace SharpHound
             foreach (string DomainName in Domains)
             {
                 CurrentDomain = DomainName;
+
+                if (options.Stealth)
+                {
+                    BlockingCollection<LocalAdminInfo> coll = new BlockingCollection<LocalAdminInfo>();
+                    Task gpowriter = StartWriter(coll, options, Task.Factory);
+                    EnumerateGPOAdmin(DomainName, coll);
+                    gpowriter.Wait();
+                    continue;
+                }
+
                 var computers =
                     db.GetComputers().Find(x => x.Domain.Equals(DomainName));
 
@@ -387,7 +397,7 @@ namespace SharpHound
         static extern IntPtr LocalFree(IntPtr hMem);
         #endregion
 
-        private void EnumerateGPOAdmin(string DomainName)
+        private void EnumerateGPOAdmin(string DomainName, BlockingCollection<LocalAdminInfo> output)
         {
             string targetsid = "S-1-5-32-544__Members";
 
@@ -438,7 +448,7 @@ namespace SharpHound
                             {
                                 v = v.Trim();
                                 List<String> members = v.Split(',').ToList();
-                                List<string> resolved = new List<string>();
+                                List<DBObject> resolved = new List<DBObject>();
                                 for (int i = 0; i < members.Count; i++)
                                 {
                                     string m = members[i];
@@ -464,21 +474,61 @@ namespace SharpHound
                                     {
                                         continue;
                                     }
-                                    string converted = helpers.ConvertSIDToName(sid);
-                                    if (converted != null)
+
+                                    string user = null;
+
+                                    DBObject obj;
+                                    if (db.FindBySID(sid,out obj))
                                     {
-                                        resolved.Add(converted);
+                                        user = obj.BloodHoundDisplayName;
+                                    }
+                                    else
+                                    {
+                                        try
+                                        {
+                                            DirectoryEntry entry = new DirectoryEntry($"LDAP://<SID={sid}");
+                                            obj = entry.ConvertToDB();
+                                            db.InsertRecord(obj);
+                                        }
+                                        catch
+                                        {
+                                            obj = null;
+                                        }
+                                    }
+
+                                    if (obj != null)
+                                    {
+                                        resolved.Add(obj);
                                     }
                                 }
                                 DirectorySearcher OUSearch = helpers.GetDomainSearcher(DomainName);
                                 
-                                OUSearch.Filter = string.Format("(&(objectCategory=organizationalUnit)(name=*)(gplink=*{0}*))", name);
+                                OUSearch.Filter = $"(&(objectCategory=organizationalUnit)(name=*)(gplink=*{name}*))";
                                 foreach (SearchResult r in OUSearch.FindAll())
                                 {
                                     DirectorySearcher compsearcher = helpers.GetDomainSearcher(DomainName, ADSPath: r.GetProp("adspath"));
                                     foreach (SearchResult ra in compsearcher.FindAll())
                                     {
-                                        
+                                        string sat = ra.GetProp("samaccounttype");
+                                        if (sat == null)
+                                        {
+                                            continue;
+                                        }
+
+                                        DBObject resultdb = ra.ConvertToDB();
+
+                                        if (sat.Equals("805306369"))
+                                        {
+                                            foreach (DBObject obj in resolved)
+                                            {
+                                                output.Add(new LocalAdminInfo
+                                                {
+                                                    objectname = obj.BloodHoundDisplayName,
+                                                    objecttype = obj.Type,
+                                                    server = resultdb.BloodHoundDisplayName
+                                                });
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -486,6 +536,8 @@ namespace SharpHound
                     }
                 }
             });
+
+            output.CompleteAdding();
 
             Console.WriteLine("Done GPO Correlation");
         }        

@@ -180,7 +180,7 @@ namespace SharpHound.EnumerationSteps
                         ActiveDirectoryRights right = (ActiveDirectoryRights)Enum.ToObject(typeof(ActiveDirectoryRights), r.AccessMask);
                         string rs = right.ToString();
                         string guid;
-                        if (r.GetType() == typeof(ObjectAce))
+                        if (r is ObjectAce)
                         {
                             guid = ((ObjectAce)r).ObjectAceType.ToString();
                         } else
@@ -192,9 +192,7 @@ namespace SharpHound.EnumerationSteps
 
                         if (rs.Equals("GenericWrite") || rs.Equals("GenericAll"))
                         {
-                            if (guid.Equals("00000000-0000-0000-0000-000000000000") || guid.Equals("")) {
-                                cont = true;
-                            }
+                            cont |= ("00000000-0000-0000-0000-000000000000".Equals(guid) || guid.Equals(""));
                         }
 
                         if (rs.Equals("WriteDacl") || rs.Equals("WriteOwner"))
@@ -204,16 +202,10 @@ namespace SharpHound.EnumerationSteps
 
                         if (rs.Equals("ExtendedRight"))
                         {
-                            if (guid.Equals("00000000-0000-0000-0000-000000000000") || guid.Equals("00299570-246d-11d0-a768-00aa006e0529"))
-                            {
-                                cont = true;
-                            }
+                            cont |= (guid.Equals("00000000-0000-0000-0000-000000000000") || guid.Equals("00299570-246d-11d0-a768-00aa006e0529"));
 
                             //DCSync
-                            if (guid.Equals("1131f6aa-9c07-11d1-f79f-00c04fc2dcd2") || guid.Equals("1131f6ad-9c07-11d1-f79f-00c04fc2dcd2"))
-                            {
-                                cont = true;
-                            }
+                            cont |= (guid.Equals("1131f6aa-9c07-11d1-f79f-00c04fc2dcd2") || guid.Equals("1131f6ad-9c07-11d1-f79f-00c04fc2dcd2"));
                         }
 
                         if (rs.Equals("WriteProperty"))
@@ -311,7 +303,7 @@ namespace SharpHound.EnumerationSteps
                                         continue;
                                     }
 
-                                    string pdomain = pdn.Substring(pdn.IndexOf("DC=")).Replace("DC=", "").Replace(",", ".");
+                                    string pdomain = pdn.Substring(pdn.IndexOf("DC=", StringComparison.CurrentCulture)).Replace("DC=", "").Replace(",", ".");
                                     PrincipalSimpleName = sam + "@" + pdomain;
                                     if (classes.Contains("group"))
                                     {
@@ -353,7 +345,7 @@ namespace SharpHound.EnumerationSteps
                                 ObjectName = result.GetProp("name");
                             }
                             string odn = result.GetProp("distinguishedname");
-                            string odomain = odn.Substring(odn.IndexOf("DC=")).Replace("DC=", "").Replace(",", ".");
+                            string odomain = odn.Substring(odn.IndexOf("DC=", StringComparison.CurrentCulture)).Replace("DC=", "").Replace(",", ".");
                             ObjectName = ObjectName + "@" + odomain;
                             if (oclasses.Contains("group"))
                             {
@@ -424,7 +416,7 @@ namespace SharpHound.EnumerationSteps
             public static ConcurrentQueue<SearchResult> SearchResults;
             public static ConcurrentQueue<ACLInfo> EnumResults = new ConcurrentQueue<ACLInfo>();
             public static ConcurrentDictionary<string, MappedPrincipal> PrincipalMap;
-            public static string[] GenericRights = new string[] { "GenericAll", "GenericWrite", "WriteOWner", "WriteDacl" };
+            public static string[] GenericRights = { "GenericAll", "GenericWrite", "WriteOWner", "WriteDacl" };
             public static Regex GenericRegex = new Regex("GenericAll|GenericWrite|WriteOwner|WriteDacl");
             public static ConcurrentDictionary<string, DCSync> syncers;
 

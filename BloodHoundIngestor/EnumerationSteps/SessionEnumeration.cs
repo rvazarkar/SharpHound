@@ -197,7 +197,6 @@ namespace SharpHound
                     }
                     else
                     {
-                        Console.WriteLine("Starting Sessions");
                         sessions = GetNetSessions(hostname, c.Domain);
                     }
                     Interlocked.Increment(ref count);
@@ -429,7 +428,6 @@ namespace SharpHound
                             PossibleNames = possible,
                             Username = username
                         };
-                        Console.WriteLine("inserting gc obj");
                         manager.InsertGCObject(obj);
                     }
                 }

@@ -26,7 +26,8 @@ namespace SharpHound
         public static void CreateInstance(Options cli)
         {
             instance = new Helpers(cli);
-            DBManager.CreateInstance(options.DBName);
+            string file = options.InMemory ? null : options.DBName;
+            DBManager.CreateInstance(file);
         }
 
         public static Helpers Instance

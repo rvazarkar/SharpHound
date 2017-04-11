@@ -2,9 +2,12 @@
 using CommandLine.Text;
 using SharpHound.EnumerationSteps;
 using System;
+using System.Collections.Generic;
 using System.DirectoryServices.ActiveDirectory;
 using System.IO;
+using System.Linq;
 using System.Security.Permissions;
+using System.Text;
 using static SharpHound.Options;
 
 namespace SharpHound
@@ -71,14 +74,99 @@ namespace SharpHound
         [Option("ForceRebuild", DefaultValue =false, HelpText ="Rebuild database cache")]
         public bool Rebuild { get; set; }
 
+        [Option("InMemory", DefaultValue =false, MutuallyExclusiveSet ="dbopt")]
+        public bool InMemory { get; set; }
+
+        [Option("RemoveDB", DefaultValue = false, MutuallyExclusiveSet = "dbopt")]
+        public bool RemoveDB { get; set; }
+
         [ParserState]
         public IParserState LastParserState { get; set; }
 
         [HelpOption]
         public string GetUsage()
         {
-            return HelpText.AutoBuild(this,
-              (HelpText current) => HelpText.DefaultParsingErrorsHandler(this, current));
+            string text = @"SharpHound v1.0.0
+Usage: SharpHound.exe <options>
+
+Enumeration Options:
+    -c , --CollectionMethod (Default: Default)
+        Default - Enumerate Trusts, Sessions, Local Admin, and Group Membership
+        Group - Enumerate Group Membership
+        LocalGroup - Enumerate Local Admin
+        Session - Enumerate Sessions
+        LoggedOn - Enumerate Sessions using Elevation
+        ComputerOnly - Enumerate Sessions and Local Admin
+        Trusts - Enumerate Domain Trusts
+
+    -s , --SearchForest
+        Search the entire forest instead of just current domain
+
+    -d , --Domain (Default: "")
+        Search a specific domain
+    
+    --SkipGCDeconfliction
+        Skip Global Catalog deconfliction during session enumeration
+        This option can result in more inaccuracies!
+
+    --Stealth
+        Use stealth collection options
+    
+
+Performance Tuning:
+    -t , --Threads (Default: 30)
+        The number of threads to use for Enumeration
+    
+    --PingTimeout (Default: 750)
+        Timeout to use when pinging computers in milliseconds
+
+    --SkipPing
+        Skip pinging computers (will most likely be slower)
+        Use this option if ping is disabled on the network
+
+Output Options
+    -f , --CSVFolder (Default: .)
+        The folder in which to store CSV files
+
+    -p , --CSVPrefix (Default: """")
+        The prefix to add to your CSV files
+
+    --URI (Default: """")
+        The URI for the Neo4j REST API
+        Setting this option will disable CSV output
+
+    --UserPass (Default: """")
+        username:password for the Neo4j REST API
+
+Database Options
+    --DB (Default: BloodHound.db)
+        Filename for the BloodHound database to write to disk
+
+    --InMemory
+        Store database in memory and don't write to disk
+        This option can be very RAM intensive. Use with caution!
+
+    --RemoveDB
+        Automatically delete the database after running
+
+    --ForceRebuild
+        Force a rebuild of the BloodHound databse
+
+General Options
+    -i , --Interval (Default: 30000)
+        Interval to display progress during enumeration in milliseconds
+
+    -v , --Verbose
+        Display Verbose Output
+";
+            return text;
+        }
+
+        private string FormatOption(int level, string option, string values)
+        {
+            string spacing = new string('\t',level);
+            string format = $"{spacing}{option}:\t{values}\n";
+            return format;
         }
 
         public void WriteVerbose(string Message)
@@ -172,6 +260,11 @@ namespace SharpHound
                         ACLEnum = new ACLEnumeration();
                         ACLEnum.EnumerateACLs();
                         break;
+                }
+
+                if (options.RemoveDB)
+                {
+                    File.Delete(options.DBName);
                 }
             }
             

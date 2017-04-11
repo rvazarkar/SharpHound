@@ -99,10 +99,10 @@ namespace SharpHound.EnumerationSteps
 
                 searcher.Dispose();
                 input.CompleteAdding();
-                Console.WriteLine("Waiting for consumers to finish...");
+                options.WriteVerbose("Waiting for consumers to finish...");
                 Task.WaitAll(taskhandles.ToArray());
                 output.CompleteAdding();
-                Console.WriteLine("Waiting for writer to finish...");
+                options.WriteVerbose("Waiting for writer to finish...");
                 WriterTask.Wait();
                 t.Dispose();
                 Console.WriteLine("Built database for " + DomainName + " in " + watch.Elapsed);

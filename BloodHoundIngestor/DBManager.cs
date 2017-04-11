@@ -13,10 +13,12 @@ namespace SharpHound
         {
             if (file == null)
             {
+                Helpers.Instance.Options.WriteVerbose("Creating In-Memory Database");
                 instance = new DBManager();
             }
             else
             {
+                Helpers.Instance.Options.WriteVerbose($"Creating database file {file}");
                 instance = new DBManager(file);
             }
         }

@@ -22,9 +22,8 @@ namespace SharpHound
         private Options options;
         private DBManager manager;
 
-        public static int progress = 0;
-        public static int totalcount;
-        static private readonly object _sync = new object();
+        private static int progress = 0;
+        private static int totalcount;
         private static string CurrentDomain;
 
         public DomainGroupEnumeration()
@@ -55,7 +54,7 @@ namespace SharpHound
 
                 LimitedConcurrencyLevelTaskScheduler scheduler = new LimitedConcurrencyLevelTaskScheduler(options.Threads);
                 TaskFactory factory = new TaskFactory(scheduler);
-                ConcurrentDictionary<string, Group> dnmap = new ConcurrentDictionary<string, Group>();
+                ConcurrentDictionary<string, DBObject> dnmap = new ConcurrentDictionary<string, DBObject>();
 
                 List<Task> taskhandles = new List<Task>();
 
@@ -123,7 +122,7 @@ namespace SharpHound
                 PrintStatus();
                 t.Dispose();
 
-                Console.WriteLine("Finished group member enumeration for " + DomainName + " in " + watch.Elapsed);
+                Console.WriteLine($"Finished group member enumeration for {DomainName} in {watch.Elapsed}");
                 watch.Reset();
             }
             Console.WriteLine($"Finished group membership enumeration in {overwatch.Elapsed}\n");
@@ -144,7 +143,7 @@ namespace SharpHound
             Console.WriteLine(progress);
         }
 
-        private Task StartConsumer(BlockingCollection<DBObject> input, BlockingCollection<GroupMembershipInfo> output, ConcurrentDictionary<string,Group> dnmap, TaskFactory factory, DBManager db)
+        private Task StartConsumer(BlockingCollection<DBObject> input, BlockingCollection<GroupMembershipInfo> output, ConcurrentDictionary<string,DBObject> dnmap, TaskFactory factory, DBManager db)
         {
             return factory.StartNew(() =>
             {
@@ -152,7 +151,7 @@ namespace SharpHound
                 {
                     foreach (string dn in obj.MemberOf)
                     {
-                        Group g;
+                        DBObject g;
                         if (db.FindDistinguishedName(dn, out g))
                         {
                             output.Add(new GroupMembershipInfo
@@ -232,16 +231,59 @@ namespace SharpHound
 
                     if (obj.PrimaryGroupID != null)
                     {
+                        
                         string domainsid = obj.SID.Substring(0, obj.SID.LastIndexOf("-"));
-                        string pgsid = domainsid + "-" + obj.PrimaryGroupID;
-                        string group = Helpers.ConvertSIDToName(pgsid).Split('\\').Last();
+                        string pgsid = $"{domainsid}-{obj.PrimaryGroupID}";
 
-                        output.Add(new GroupMembershipInfo
+                        DBObject g;
+                        if (db.FindGroupBySID(pgsid, out g))
                         {
-                            AccountName = obj.BloodHoundDisplayName,
-                            GroupName = string.Format("{0}@{1}",group.ToUpper(),obj.Domain),
-                            ObjectType = obj.Type
-                        });
+                            output.Add(new GroupMembershipInfo
+                            {
+                                AccountName = obj.BloodHoundDisplayName,
+                                GroupName = g.BloodHoundDisplayName,
+                                ObjectType = obj.Type
+                            });
+                        }else if (dnmap.TryGetValue(pgsid, out g))
+                        {
+                            output.Add(new GroupMembershipInfo
+                            {
+                                AccountName = obj.BloodHoundDisplayName,
+                                GroupName = g.BloodHoundDisplayName,
+                                ObjectType = obj.Type
+                            });
+                        }
+                        else
+                        {
+                            try
+                            {
+                                DirectoryEntry entry = new DirectoryEntry($"LDAP://<SID={pgsid}>");
+                                g = (Group)entry.ConvertToDB();
+                                manager.InsertRecord(g);
+                                output.Add(new GroupMembershipInfo
+                                {
+                                    AccountName = obj.BloodHoundDisplayName,
+                                    GroupName = g.BloodHoundDisplayName,
+                                    ObjectType = obj.Type
+                                });
+                            }
+                            catch
+                            {
+                                string group = Helpers.ConvertSIDToName(pgsid).Split('\\').Last();
+                                g = new Group
+                                {
+                                    BloodHoundDisplayName = $"{group.ToUpper()}@{obj.Domain}"
+                                };
+
+                                dnmap.TryAdd(pgsid, g);
+                                output.Add(new GroupMembershipInfo
+                                {
+                                    AccountName = obj.BloodHoundDisplayName,
+                                    GroupName = g.BloodHoundDisplayName,
+                                    ObjectType = obj.Type
+                                });
+                            }
+                        }
                     }
                     Interlocked.Increment(ref DomainGroupEnumeration.progress);
                 }

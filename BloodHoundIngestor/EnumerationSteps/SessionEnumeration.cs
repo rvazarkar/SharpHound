@@ -22,11 +22,17 @@ namespace SharpHound
     {
         private Helpers Helpers;
         private Options options;
+        private DBManager manager;
 
         public SessionEnumeration()
         {
             Helpers = Helpers.Instance;
             options = Helpers.Options;
+        }
+
+        public void StartEnumeration()
+        {
+
         }
 
         public void EnumerateSessions()

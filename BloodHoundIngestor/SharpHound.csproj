@@ -96,44 +96,43 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="ACLEnumeration.cs" />
-    <Compile Include="BaseClasses\Computer.cs" />
-    <Compile Include="BaseClasses\DBObject.cs" />
-    <Compile Include="BaseClasses\DomainDB.cs" />
-    <Compile Include="BaseClasses\DomainTrust.cs" />
+    <Compile Include="DatabaseObjects\GlobalCatalogMap.cs" />
+    <Compile Include="EnumerationSteps\ACLEnumeration.cs" />
+    <Compile Include="DatabaseObjects\Computer.cs" />
+    <Compile Include="DatabaseObjects\DBObject.cs" />
+    <Compile Include="DatabaseObjects\DomainDB.cs" />
+    <Compile Include="DatabaseObjects\DomainTrust.cs" />
     <Compile Include="BaseClasses\EnumeratorBase.cs" />
-    <Compile Include="BaseClasses\Group.cs" />
+    <Compile Include="DatabaseObjects\Group.cs" />
     <Compile Include="BaseClasses\Extensions.cs" />
-    <Compile Include="BaseClasses\User.cs" />
+    <Compile Include="DatabaseObjects\User.cs" />
     <Compile Include="BaseClasses\WriterBase.cs" />
     <Compile Include="CustomScheduler.cs" />
     <Compile Include="DBManager.cs" />
-    <Compile Include="Objects\ACLInfo.cs" />
-    <Compile Include="Objects\ADObject.cs" />
+    <Compile Include="OutputObjects\ACLInfo.cs" />
     <Compile Include="Objects\DCSync.cs" />
     <Compile Include="Objects\MappedPrincipal.cs" />
     <Compile Include="SharpHound.cs" />
-    <Compile Include="DomainGroupEnumeration.cs" />
+    <Compile Include="EnumerationSteps\DomainGroupEnumeration.cs" />
     <Compile Include="Exceptions\APIFailedException.cs" />
     <Compile Include="Exceptions\SystemDownException.cs" />
-    <Compile Include="DomainTrustMapping.cs" />
+    <Compile Include="EnumerationSteps\DomainTrustMapping.cs" />
     <Compile Include="Helpers.cs" />
-    <Compile Include="LocalAdminEnumeration.cs" />
-    <Compile Include="Objects\GroupEnumObject.cs" />
-    <Compile Include="Objects\GroupMembershipInfo.cs" />
-    <Compile Include="Objects\LocalAdminInfo.cs" />
-    <Compile Include="Objects\SessionInfo.cs" />
+    <Compile Include="EnumerationSteps\LocalAdminEnumeration.cs" />
+    <Compile Include="OutputObjects\GroupMembershipInfo.cs" />
+    <Compile Include="OutputObjects\LocalAdminInfo.cs" />
+    <Compile Include="OutputObjects\SessionInfo.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="SessionEnumeration.cs" />
-    <Compile Include="SidCacheBuilder.cs" />
+    <Compile Include="EnumerationSteps\SessionEnumeration.cs" />
+    <Compile Include="EnumerationSteps\SidCacheBuilder.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="app.config" />
-    <None Include="BloodHound.ps1" />
-    <None Include="bloodhound_acl.ps1" />
+    <None Include="PowerShell Ref\BloodHound.ps1" />
+    <None Include="PowerShell Ref\bloodhound_acl.ps1" />
     <None Include="packages.config" />
-    <None Include="PowerView.ps1" />
-    <None Include="PowerView1.ps1" />
+    <None Include="PowerShell Ref\PowerView.ps1" />
+    <None Include="PowerShell Ref\PowerView1.ps1" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="favicon.ico" />

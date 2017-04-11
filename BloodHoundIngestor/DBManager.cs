@@ -212,7 +212,7 @@ namespace SharpHound
             
         }
 
-        public bool FindDistinguishedName(string dn, out Group matched)
+        public bool FindDistinguishedName(string dn, out DBObject matched)
         {
             matched = db.GetCollection<Group>("groups")
                 .FindOne(x => x.DistinguishedName.Equals(dn));

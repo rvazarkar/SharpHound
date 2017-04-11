@@ -1,10 +1,6 @@
-﻿using LiteDB;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+﻿using System.Collections.Generic;
 
-namespace SharpHound.BaseClasses
+namespace SharpHound.DatabaseObjects
 {
     public class User : DBObject
     {

@@ -1,4 +1,5 @@
 ﻿using SharpHound.BaseClasses;
+using SharpHound.DatabaseObjects;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -6,7 +7,7 @@ using System.DirectoryServices.ActiveDirectory;
 using System.IO;
 using System.Threading.Tasks;
 
-namespace SharpHound
+namespace SharpHound.EnumerationSteps
 {
     class DomainTrustMapping
     {

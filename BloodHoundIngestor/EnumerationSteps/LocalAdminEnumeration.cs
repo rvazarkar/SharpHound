@@ -1,6 +1,8 @@
 ﻿using ExtensionMethods;
 using SharpHound.BaseClasses;
+using SharpHound.DatabaseObjects;
 using SharpHound.Exceptions;
+using SharpHound.OutputObjects;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -14,7 +16,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace SharpHound
+namespace SharpHound.EnumerationSteps
 {
     class LocalAdminEnumeration
     {

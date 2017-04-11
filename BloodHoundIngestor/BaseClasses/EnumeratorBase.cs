@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 
-namespace SharpHound
+namespace SharpHound.BaseClasses
 {
     public abstract class EnumeratorBase
     {

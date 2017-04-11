@@ -1,7 +1,7 @@
 ﻿using ExtensionMethods;
 using LiteDB;
-using SharpHound.BaseClasses;
-using SharpHound.Objects;
+using SharpHound.DatabaseObjects;
+using SharpHound.OutputObjects;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -14,7 +14,7 @@ using System.Security.Principal;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace SharpHound
+namespace SharpHound.EnumerationSteps
 {
     class DomainGroupEnumeration
     {
@@ -139,8 +139,8 @@ namespace SharpHound
         {
             int c = DomainGroupEnumeration.totalcount;
             int p = DomainGroupEnumeration.progress;
-            string progress = $"Group Enumeration for {DomainGroupEnumeration.CurrentDomain} - {DomainGroupEnumeration.progress}/{DomainGroupEnumeration.totalcount} ({(float)((p / c) * 100)}%) completed.";
-            Console.WriteLine(progress);
+            string ProgressStr = $"Group Enumeration for {DomainGroupEnumeration.CurrentDomain} - {DomainGroupEnumeration.progress}/{DomainGroupEnumeration.totalcount} ({(float)((p / c) * 100)}%) completed.";
+            Console.WriteLine(ProgressStr);
         }
 
         private Task StartConsumer(BlockingCollection<DBObject> input, BlockingCollection<GroupMembershipInfo> output, ConcurrentDictionary<string,DBObject> dnmap, TaskFactory factory, DBManager db)
@@ -235,8 +235,7 @@ namespace SharpHound
                         string domainsid = obj.SID.Substring(0, obj.SID.LastIndexOf("-"));
                         string pgsid = $"{domainsid}-{obj.PrimaryGroupID}";
 
-                        DBObject g;
-                        if (db.FindGroupBySID(pgsid, out g))
+                        if (db.FindGroupBySID(pgsid, out DBObject g))
                         {
                             output.Add(new GroupMembershipInfo
                             {
@@ -244,7 +243,8 @@ namespace SharpHound
                                 GroupName = g.BloodHoundDisplayName,
                                 ObjectType = obj.Type
                             });
-                        }else if (dnmap.TryGetValue(pgsid, out g))
+                        }
+                        else if (dnmap.TryGetValue(pgsid, out g))
                         {
                             output.Add(new GroupMembershipInfo
                             {

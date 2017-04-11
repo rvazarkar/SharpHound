@@ -1,5 +1,6 @@
 ﻿using SharpHound;
 using SharpHound.BaseClasses;
+using SharpHound.DatabaseObjects;
 using System;
 using System.Collections.Generic;
 using System.DirectoryServices;

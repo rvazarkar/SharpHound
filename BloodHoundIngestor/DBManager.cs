@@ -1,10 +1,6 @@
 ﻿using LiteDB;
-using SharpHound.BaseClasses;
-using System;
-using System.Collections.Generic;
+using SharpHound.DatabaseObjects;
 using System.IO;
-using System.Linq;
-using System.Text;
 
 namespace SharpHound
 {

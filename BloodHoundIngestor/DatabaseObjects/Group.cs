@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace SharpHound.BaseClasses
+namespace SharpHound.DatabaseObjects
 {
     public class Group : DBObject
     {

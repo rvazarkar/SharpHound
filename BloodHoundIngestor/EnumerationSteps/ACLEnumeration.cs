@@ -1,5 +1,7 @@
 ﻿using ExtensionMethods;
+using SharpHound.BaseClasses;
 using SharpHound.Objects;
+using SharpHound.OutputObjects;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -13,7 +15,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 
-namespace SharpHound
+namespace SharpHound.EnumerationSteps
 {
     class ACLEnumeration
     {

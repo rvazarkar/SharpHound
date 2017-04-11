@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace SharpHound
+namespace SharpHound.BaseClasses
 {
     public abstract class WriterBase
     {

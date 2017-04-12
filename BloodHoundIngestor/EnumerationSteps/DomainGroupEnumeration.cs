@@ -62,8 +62,9 @@ namespace SharpHound.EnumerationSteps
                 Task writer = StartWriter(output, options, factory);
                 for (int i = 0; i < options.Threads; i++){
                     taskhandles.Add(StartConsumer(input, output, dnmap, factory, manager));
-                }                
+                }
 
+                progress = 0;
                 totalcount = 0;
 
                 var users =
@@ -133,8 +134,12 @@ namespace SharpHound.EnumerationSteps
         private void PrintStatus()
         {
             int c = DomainGroupEnumeration.totalcount;
+            if (c == 0)
+            {
+                return;
+            }
             int p = DomainGroupEnumeration.progress;
-            string ProgressStr = $"Group Enumeration for {DomainGroupEnumeration.CurrentDomain} - {DomainGroupEnumeration.progress}/{DomainGroupEnumeration.totalcount} ({(float)((p / c) * 100)}%) completed.";
+            string ProgressStr = $"Group Enumeration for {DomainGroupEnumeration.CurrentDomain} - {p}/{c} ({(float)((p / c) * 100)}%) completed.";
             Console.WriteLine(ProgressStr);
         }
 
@@ -215,7 +220,6 @@ namespace SharpHound.EnumerationSteps
                                 dnmap.TryAdd(dn, g);
                             }
 
-
                             output.Add(new GroupMembershipInfo
                             {
                                 AccountName = obj.BloodHoundDisplayName,
@@ -231,7 +235,7 @@ namespace SharpHound.EnumerationSteps
                         string domainsid = obj.SID.Substring(0, obj.SID.LastIndexOf("-"));
                         string pgsid = $"{domainsid}-{obj.PrimaryGroupID}";
 
-                        if (db.FindGroupBySID(pgsid, out DBObject g))
+                        if (db.FindGroupBySID(pgsid, out DBObject g, CurrentDomain))
                         {
                             output.Add(new GroupMembershipInfo
                             {
@@ -292,9 +296,14 @@ namespace SharpHound.EnumerationSteps
             {
                 if (_options.URI == null)
                 {
-                    using (StreamWriter writer = new StreamWriter(_options.GetFilePath("group_memberships.csv")))
+                    string path = _options.GetFilePath("group_memberships.csv");
+                    bool append = false || File.Exists(path);
+                    using (StreamWriter writer = new StreamWriter(path, append))
                     {
-                        writer.WriteLine("GroupName,AccountName,AccountType");
+                        if (!append)
+                        {
+                            writer.WriteLine("GroupName,AccountName,AccountType");
+                        }
                         writer.AutoFlush = true;
                         foreach (GroupMembershipInfo info in output.GetConsumingEnumerable())
                         {

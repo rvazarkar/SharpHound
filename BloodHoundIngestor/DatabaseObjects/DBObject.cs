@@ -5,14 +5,14 @@ namespace SharpHound.DatabaseObjects
 {
     public class DBObject
     {
-        [BsonId, BsonIndex]
+        [BsonIndex]
         public string SID { get; set; }
         public string BloodHoundDisplayName { get; set; }
         [BsonIndex]
         public string PrimaryGroupID { get; set; }
         [BsonIndex]
         public List<string> MemberOf { get; set; }
-        [BsonIndex]
+        [BsonIndex, BsonId]
         public string DistinguishedName { get; set; }
         [BsonIndex]
         public string Domain { get; set; }

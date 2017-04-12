@@ -26,7 +26,7 @@ namespace SharpHound.Objects
                 AceType = "DCSync",
                 Inherited = false,
                 ObjectName = Domain,
-                ObjectType = "DOMAIN",
+                ObjectType = "domain",
                 PrincipalName = PrincipalName,
                 PrincipalType = PrincipalType,
                 Qualifier = "",

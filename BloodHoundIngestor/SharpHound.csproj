@@ -96,6 +96,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="DatabaseObjects\DomainACL.cs" />
     <Compile Include="DatabaseObjects\GlobalCatalogMap.cs" />
     <Compile Include="EnumerationSteps\ACLEnumeration.cs" />
     <Compile Include="DatabaseObjects\Computer.cs" />

@@ -25,108 +25,6 @@ namespace SharpHound.Objects
         {
             switch (sid)
             {
-                case "S-1-0":
-                    result = new MappedPrincipal("Null Authority", "USER");
-                    break;
-                case "S-1-0-0":
-                    result = new MappedPrincipal("Nobody", "USER");
-                    break;
-                case "S-1-1":
-                    result = new MappedPrincipal("World Authority", "USER");
-                    break;
-                case "S-1-1-0":
-                    result = new MappedPrincipal("Everyone", "GROUP");
-                    break;
-                case "S-1-2":
-                    result = new MappedPrincipal("Local Authority", "USER");
-                    break;
-                case "S-1-2-0":
-                    result = new MappedPrincipal("Local", "GROUP");
-                    break;
-                case "S-1-2-1":
-                    result = new MappedPrincipal("Console Logon", "GROUP");
-                    break;
-                case "S-1-3":
-                    result = new MappedPrincipal("Creator Authority", "USER");
-                    break;
-                case "S-1-3-0":
-                    result = new MappedPrincipal("Creator Owner", "USER");
-                    break;
-                case "S-1-3-1":
-                    result = new MappedPrincipal("Creator Group", "GROUP");
-                    break;
-                case "S-1-3-2":
-                    result = new MappedPrincipal("Creator Owner Server", "COMPUTER");
-                    break;
-                case "S-1-3-3":
-                    result = new MappedPrincipal("Creator Group Server", "COMPUTER");
-                    break;
-                case "S-1-3-4":
-                    result = new MappedPrincipal("Owner Rights", "GROUP");
-                    break;
-                case "S-1-4":
-                    result = new MappedPrincipal("Non-unique Authority", "USER");
-                    break;
-                case "S-1-5":
-                    result = new MappedPrincipal("NT Authority", "USER");
-                    break;
-                case "S-1-5-1":
-                    result = new MappedPrincipal("Dialup", "GROUP");
-                    break;
-                case "S-1-5-2":
-                    result = new MappedPrincipal("Network", "GROUP");
-                    break;
-                case "S-1-5-3":
-                    result = new MappedPrincipal("Batch", "GROUP");
-                    break;
-                case "S-1-5-4":
-                    result = new MappedPrincipal("Interactive", "GROUP");
-                    break;
-                case "S-1-5-6":
-                    result = new MappedPrincipal("Service", "GROUP");
-                    break;
-                case "S-1-5-7":
-                    result = new MappedPrincipal("Anonymous", "GROUP");
-                    break;
-                case "S-1-5-8":
-                    result = new MappedPrincipal("Proxy", "GROUP");
-                    break;
-                case "S-1-5-9":
-                    result = new MappedPrincipal("Enterprise Domain Controllers", "GROUP");
-                    break;
-                case "S-1-5-10":
-                    result = new MappedPrincipal("Principal Self", "USER");
-                    break;
-                case "S-1-5-11":
-                    result = new MappedPrincipal("Authenticated Users", "GROUP");
-                    break;
-                case "S-1-5-12":
-                    result = new MappedPrincipal("Restricted Code", "GROUP");
-                    break;
-                case "S-1-5-13":
-                    result = new MappedPrincipal("Terminal Server Users", "GROUP");
-                    break;
-                case "S-1-5-14":
-                    result = new MappedPrincipal("Remote Interactive Logon", "GROUP");
-                    break;
-                case "S-1-5-15":
-                    result = new MappedPrincipal("This Organization", "GROUP");
-                    break;
-                case "S-1-5-17":
-                    result = new MappedPrincipal("This Organization", "GROUP");
-                    break;
-                case "S-1-5-18":
-                    result = new MappedPrincipal("Local System", "USER");
-                    break;
-                case "S-1-5-19":
-                    result = new MappedPrincipal("NT Authority", "USER");
-                    break;
-                case "S-1-5-20":
-                    result = new MappedPrincipal("NT Authority", "USER");
-                    break;
-                case "S-1-5-80-0":
-                    result = new MappedPrincipal("All Services", "GROUP");
-                    break;
                 case "S-1-5-32-544":
                     result = new MappedPrincipal("Administrators", "GROUP");
                     break;
@@ -180,6 +78,9 @@ namespace SharpHound.Objects
                     break;
                 case "S-1-5-32-562":
                     result = new MappedPrincipal("Distributed COM Users", "GROUP");
+                    break;
+                case "S-1-5-32-568":
+                    result = new MappedPrincipal("IIS_IUSRS", "GROUP");
                     break;
                 case "S-1-5-32-569":
                     result = new MappedPrincipal("Cryptographic Operators", "GROUP");

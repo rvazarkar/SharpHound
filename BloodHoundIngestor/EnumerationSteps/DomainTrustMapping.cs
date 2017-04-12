@@ -12,14 +12,14 @@ namespace SharpHound.EnumerationSteps
     class DomainTrustMapping
     {
         private Helpers Helpers;
-        private Options _options;
+        private Options options;
         private DBManager db;
 
 
         public DomainTrustMapping()
         {
             Helpers = Helpers.Instance;
-            _options = Helpers.Options;
+            options = Helpers.Options;
             db = DBManager.Instance;
         }
         
@@ -43,11 +43,16 @@ namespace SharpHound.EnumerationSteps
         {
             return Task.Factory.StartNew(() =>
             {
-                if (_options.URI == null)
+                if (options.URI == null)
                 {
-                    using (StreamWriter writer = new StreamWriter(_options.GetFilePath("trusts.csv")))
+                    string path = options.GetFilePath("trusts.csv");
+                    bool append = false || File.Exists(path);
+                    using (StreamWriter writer = new StreamWriter(path, append))
                     {
-                        writer.WriteLine("SourceDomain,TargetDomain,TrustDirection,TrustType,Transitive");
+                        if (!append)
+                        {
+                            writer.WriteLine("SourceDomain,TargetDomain,TrustDirection,TrustType,Transitive");
+                        }                        
                         writer.AutoFlush = true;
                         foreach (DomainTrust info in output.GetConsumingEnumerable())
                         {

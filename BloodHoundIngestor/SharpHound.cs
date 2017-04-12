@@ -3,6 +3,7 @@ using CommandLine.Text;
 using SharpHound.EnumerationSteps;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.DirectoryServices.ActiveDirectory;
 using System.IO;
 using System.Linq;
@@ -23,6 +24,7 @@ namespace SharpHound
             LoggedOn,
             Trusts,
             ACL,
+            Cache,
             Default
         }
 
@@ -92,12 +94,14 @@ Usage: SharpHound.exe <options>
 Enumeration Options:
     -c , --CollectionMethod (Default: Default)
         Default - Enumerate Trusts, Sessions, Local Admin, and Group Membership
+        Cache - Only build the LDAP Cache
         Group - Enumerate Group Membership
         LocalGroup - Enumerate Local Admin
         Session - Enumerate Sessions
         LoggedOn - Enumerate Sessions using Elevation
         ComputerOnly - Enumerate Sessions and Local Admin
         Trusts - Enumerate Domain Trusts
+        ACL - Enumerate ACLs
 
     -s , --SearchForest
         Search the entire forest instead of just current domain
@@ -209,6 +213,8 @@ General Options
                     Console.WriteLine("Unable to contact domain or invalid domain specified");
                     Environment.Exit(0);
                 }
+                Stopwatch overwatch = Stopwatch.StartNew();
+
                 DomainTrustMapping TrustMapper;
                 DomainGroupEnumeration GroupEnumeration;
                 LocalAdminEnumeration AdminEnumeration;
@@ -258,7 +264,7 @@ General Options
                         break;
                     case CollectionMethod.ACL:
                         ACLEnum = new ACLEnumeration();
-                        ACLEnum.EnumerateACLs();
+                        ACLEnum.StartEnumeration();
                         break;
                 }
 
@@ -266,6 +272,10 @@ General Options
                 {
                     File.Delete(options.DBName);
                 }
+
+                Console.WriteLine();
+                Console.WriteLine($"SharpHound finished all enumeration in {overwatch.Elapsed}");
+                overwatch.Stop();
             }
             
         }

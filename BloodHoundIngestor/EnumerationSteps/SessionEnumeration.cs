@@ -6,15 +6,12 @@ using System.Diagnostics;
 using System.DirectoryServices;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Runtime.InteropServices;
-using System.Security.Principal;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using ExtensionMethods;
 using SharpHound.OutputObjects;
-using SharpHound.BaseClasses;
 using SharpHound.DatabaseObjects;
 
 namespace SharpHound
@@ -161,9 +158,14 @@ namespace SharpHound
             {
                 if (options.URI == null)
                 {
-                    using (StreamWriter writer = new StreamWriter(options.GetFilePath("sessions.csv")))
+                    string path = options.GetFilePath("sessions.csv");
+                    bool append = false || File.Exists(path);
+                    using (StreamWriter writer = new StreamWriter(path, append))
                     {
-                        writer.WriteLine("UserName, ComputerName, Weight");
+                        if (!append)
+                        {
+                            writer.WriteLine("UserName, ComputerName, Weight");
+                        }
                         writer.AutoFlush = true;
                         foreach (SessionInfo info in output.GetConsumingEnumerable())
                         {
@@ -281,7 +283,7 @@ namespace SharpHound
 
                 foreach (var x in filtered)
                 {
-                    if (manager.FindBySID(x, out DBObject resolved))
+                    if (manager.FindBySID(x, CurrentDomain, out DBObject resolved))
                     {
                         results.Add(new SessionInfo()
                         {

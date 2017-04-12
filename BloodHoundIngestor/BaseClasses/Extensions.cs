@@ -67,6 +67,7 @@ namespace ExtensionMethods
             string[] groups = { "268435456", "268435457", "536870912", "536870913" };
             string[] computers = { "805306369" };
             string[] users = { "805306368" };
+            
             System.Text.RegularExpressions.Regex re = new System.Text.RegularExpressions.Regex(@"HOST\/([A-Za-z0-9-_]*\.[A-Za-z0-9-_]*\.[A-Za-z0-9-_]*)$");
 
             byte[] sidbytes = result.GetPropBytes("objectsid");
@@ -120,7 +121,7 @@ namespace ExtensionMethods
                     Type = "user"
                 };
             }
-            else
+            else if (computers.Contains(accounttype))
             {
                 string hostname = result.GetProp("dnshostname");
                 if (hostname == null)
@@ -152,6 +153,18 @@ namespace ExtensionMethods
                     SAMAccountName = san,
                     SID = sidstring,
                     Type = "computer"
+                };
+            }
+            else
+            {
+                temp = new DomainACL
+                {
+                    NTSecurityDescriptor = nt,
+                    SID = sidstring,
+                    DistinguishedName = dn,
+                    Domain = Domain,
+                    BloodHoundDisplayName = Domain,
+                    Type = "domain"
                 };
             }
 

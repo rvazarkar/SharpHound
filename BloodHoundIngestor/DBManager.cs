@@ -1,6 +1,8 @@
 ﻿using LiteDB;
 using SharpHound.DatabaseObjects;
+using System;
 using System.IO;
+using System.Linq;
 
 namespace SharpHound
 {
@@ -82,81 +84,141 @@ namespace SharpHound
             return false;
         }
 
-        public bool FindBySID(string sid, out DBObject obj)
+        public bool FindBySID(string sid, string Domain, out DBObject obj)
         {
+            Domain = Domain.ToLower();
             var users = db.GetCollection<User>("users");
             var groups = db.GetCollection<Group>("groups");
             var computers = db.GetCollection<Computer>("computers");
 
 
-            obj = users.FindOne(x => x.SID.Equals(sid));
-            if (obj != null)
+            var foundusers = users.Find(x => x.SID.Equals(sid));
+            if (foundusers.Count() > 1)
             {
-                return true;
+                obj = foundusers.First(x => x.Domain.Equals(Domain, StringComparison.InvariantCultureIgnoreCase));
+            }else if (foundusers.Count() == 1)
+            {
+                obj = foundusers.First() as DBObject;
             }
-            obj = computers.FindOne(x => x.SID.Equals(sid));
+            else
+            {
+                obj = null;
+            }
+
             if (obj != null)
             {
                 return true;
             }
 
-            obj = groups.FindOne(x => x.SID.Equals(sid));
+            var foundcomputers = computers.Find(x => x.SID.Equals(sid));
+            if (foundcomputers.Count() > 1)
+            {
+                obj = foundcomputers.First(x => x.Domain.Equals(Domain, StringComparison.InvariantCultureIgnoreCase));
+            }
+            else if (foundcomputers.Count() == 1)
+            {
+                obj = foundcomputers.First() as DBObject;
+            }
+            else
+            {
+                obj = null;
+            }
+
             if (obj != null)
             {
                 return true;
             }
+
+
+            var foundgroups = groups.Find(x => x.SID.Equals(sid));
+            if (foundgroups.Count() > 1)
+            {
+                obj = foundgroups.First(x => x.Domain.Equals(Domain, StringComparison.InvariantCultureIgnoreCase));
+            }
+            else if (foundgroups.Count() == 1)
+            {
+                obj = foundgroups.First() as DBObject;
+            }
+            else
+            {
+                obj = null;
+            }
+
+            if (obj != null)
+            {
+                return true;
+            }
+
             return false;
         }
 
-        public bool FindUserBySID(string sid, out DBObject obj)
+        public bool FindUserBySID(string sid, out DBObject obj, string Domain)
         {
             var users = db.GetCollection<User>("users");
 
-            obj = users.FindOne(x => x.SID.Equals(sid));
-            if (obj == null)
+            var found = users.Find(x => x.SID.Equals(sid));
+            if (found.Count() > 1)
             {
-                return true;
+                obj = found.Where(x => x.Domain.Equals(Domain, StringComparison.InvariantCultureIgnoreCase)) as DBObject;
+            }
+            else if (found.Count() == 1)
+            {
+                obj = found.First() as DBObject;
             }
             else
             {
-                return false;
+                obj = null;
             }
+
+            return obj != null;
         }
 
-        public bool FindGroupBySID(string sid, out DBObject obj)
+        public bool FindGroupBySID(string sid, out DBObject obj, string Domain)
         {
             var groups = db.GetCollection<Group>("groups");
 
-            obj = groups.FindOne(x => x.SID.Equals(sid));
-            if (obj == null)
+            var found = groups.Find(x => x.SID.Equals(sid));
+            if (found.Count() > 1)
             {
-                return true;
+                obj = found.Where(x => x.Domain.Equals(Domain, StringComparison.InvariantCultureIgnoreCase)) as DBObject;
+            }
+            else if (found.Count() == 1)
+            {
+                obj = found.First() as DBObject;
             }
             else
             {
-                return false;
+                obj = null;
             }
+
+            return obj != null;
         }
 
-        public bool FindComputerBySID(string sid, out DBObject obj)
+        public bool FindComputerBySID(string sid, out DBObject obj, string Domain)
         {
             var computers = db.GetCollection<Computer>("computers");
 
-            obj = computers.FindOne(x => x.SID.Equals(sid));
-            if (obj == null)
+            var found = computers.Find(x => x.SID.Equals(sid));
+            if (found.Count() > 1)
             {
-                return true;
+                obj = found.Where(x => x.Domain.Equals(Domain, StringComparison.InvariantCultureIgnoreCase)) as DBObject;
+            }
+            else if (found.Count() == 1)
+            {
+                obj = found.First() as DBObject;
             }
             else
             {
-                return false;
+                obj = null;
             }
+
+            return obj != null;
         }
 
         public bool IsDomainCompleted(string Domain)
         {
             var domains = db.GetCollection<DomainDB>("domains");
-            DomainDB d = domains.FindOne(x => x.DomainDNSName.Equals(Domain));
+            DomainDB d = domains.FindOne(x => x.DomainDNSName.Equals(Domain, StringComparison.InvariantCultureIgnoreCase));
             if (d == null || !d.Completed)
             {
                 return false;
@@ -179,14 +241,7 @@ namespace SharpHound
             var domains = db.GetCollection<DomainDB>("domains");
             obj = domains.FindOne(x => x.DomainDNSName.Equals(search) || x.DomainShortName.Equals(search) || x.DomainSid.Equals(search));
 
-            if (obj == null)
-            {
-                return false;
-            }
-            else
-            {
-                return true;
-            }
+            return obj != null;
         }
 
         public void InsertGCObject(GlobalCatalogMap obj)
@@ -207,18 +262,22 @@ namespace SharpHound
             var users = db.GetCollection<User>("users");
             var groups = db.GetCollection<Group>("groups");
             var computers = db.GetCollection<Computer>("computers");
+            var domainacl = db.GetCollection<DomainACL>("domainacl");
             
-            if (record.GetType().Equals(typeof(User)))
+            if (record is User)
             {
                 users.Upsert(record as User);
             }
-            else if (record.GetType().Equals(typeof(Group)))
+            else if (record is Group)
             {
                 groups.Upsert(record as Group);
             }
-            else if (record.GetType().Equals(typeof(Computer)))
+            else if (record is Computer)
             {
                 computers.Upsert(record as Computer);
+            }else if (record is DomainACL)
+            {
+                domainacl.Upsert(record as DomainACL);
             }
             
         }
@@ -226,7 +285,7 @@ namespace SharpHound
         public bool FindDistinguishedName(string dn, out DBObject matched)
         {
             matched = db.GetCollection<Group>("groups")
-                .FindOne(x => x.DistinguishedName.Equals(dn));
+                .FindOne(x => x.DistinguishedName.Equals(dn, StringComparison.InvariantCultureIgnoreCase));
             
             if (matched == null)
             {
@@ -256,6 +315,11 @@ namespace SharpHound
         public LiteCollection<DomainDB> GetDomains()
         {
             return db.GetCollection<DomainDB>("domains");
+        }
+
+        public LiteCollection<DomainACL> GetDomainACLS()
+        {
+            return db.GetCollection<DomainACL>("domainacl");
         }
     }
 }

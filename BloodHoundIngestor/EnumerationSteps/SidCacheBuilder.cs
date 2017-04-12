@@ -1,6 +1,5 @@
 ﻿using ExtensionMethods;
 using LiteDB;
-using SharpHound.BaseClasses;
 using SharpHound.DatabaseObjects;
 using System;
 using System.Collections.Concurrent;
@@ -8,12 +7,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.DirectoryServices;
 using System.DirectoryServices.ActiveDirectory;
-using System.IO;
-using System.Linq;
 using System.Runtime.InteropServices;
-using System.Security.Principal;
-using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace SharpHound.EnumerationSteps
@@ -89,8 +83,9 @@ namespace SharpHound.EnumerationSteps
                     taskhandles.Add(StartConsumer(input, output, factory));
                 }
 
-                searcher.Filter = "(|(samAccountType=805306368)(samAccountType=805306369)(samAccountType=268435456)(samAccountType=268435457)(samAccountType=536870912)(samAccountType=536870913))";
+                searcher.Filter = "(|(samAccountType=805306368)(samAccountType=805306369)(samAccountType=268435456)(samAccountType=268435457)(samAccountType=536870912)(samAccountType=536870913)(objectclass=domain))";
                 searcher.PropertiesToLoad.AddRange(props);
+                searcher.SecurityMasks = SecurityMasks.Dacl;
 
                 foreach (SearchResult r in searcher.FindAll())
                 {
@@ -139,6 +134,8 @@ namespace SharpHound.EnumerationSteps
                 var users = db.GetCollection<User>("users");
                 var computers = db.GetCollection<Computer>("computers");
                 var groups = db.GetCollection<Group>("groups");
+                var domainacl = db.GetCollection<DomainACL>("domainacl");
+
                 var transaction = db.BeginTrans();
                 Stopwatch watch = Stopwatch.StartNew();
 
@@ -152,9 +149,13 @@ namespace SharpHound.EnumerationSteps
                     {
                         groups.Upsert(obj as Group);
                     }
-                    else
+                    else if (obj is Computer)
                     {
                         computers.Upsert(obj as Computer);
+                    }
+                    else
+                    {
+                        domainacl.Upsert(obj as DomainACL);
                     }
                     SidCacheBuilder.count++;
 
@@ -192,12 +193,7 @@ namespace SharpHound.EnumerationSteps
             Queue<string> ToEnum = new Queue<string>();
 
             //Get our current domain's info
-            Domain domain = helpers.GetDomain(DomainName);
-            if (domain == null)
-            {
-                return;
-            }
-            string current = domain.Name;
+            string current = DomainName;
             ToEnum.Enqueue(current);
             //Convert the DNS name to the NetBIOS name
             IntPtr pDCI = IntPtr.Zero;
@@ -233,6 +229,8 @@ namespace SharpHound.EnumerationSteps
 
                 SearchResult dc = searcher.FindOne();
                 string server = dc.GetProp("dnshostname");
+
+                searcher.Dispose();
 
                 List<DomainTrust> trusts = new List<DomainTrust>();
 

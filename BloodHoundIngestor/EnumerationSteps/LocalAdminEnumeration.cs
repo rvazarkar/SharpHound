@@ -120,9 +120,14 @@ namespace SharpHound.EnumerationSteps
             {
                 if (options.URI == null)
                 {
-                    using (StreamWriter writer = new StreamWriter(options.GetFilePath("local_admins.csv")))
+                    string path = options.GetFilePath("local_admins.csv");
+                    bool append = false || File.Exists(path);
+                    using (StreamWriter writer = new StreamWriter(path, append))
                     {
-                        writer.WriteLine("ComputerName,AccountName,AccountType");
+                        if (!append)
+                        {
+                            writer.WriteLine("ComputerName,AccountName,AccountType");
+                        }
                         writer.AutoFlush = true;
                         foreach (LocalAdminInfo info in output.GetConsumingEnumerable())
                         {
@@ -183,29 +188,185 @@ namespace SharpHound.EnumerationSteps
             });
         }
 
+        private void EnumerateGPOAdmin(string DomainName, BlockingCollection<LocalAdminInfo> output)
+        {
+            string targetsid = "S-1-5-32-544__Members";
+
+            Console.WriteLine("Starting GPO Correlation");
+
+            DirectorySearcher gposearcher = helpers.GetDomainSearcher(DomainName);
+            gposearcher.Filter = "(&(objectCategory=groupPolicyContainer)(name=*)(gpcfilesyspath=*))";
+            gposearcher.PropertiesToLoad.AddRange(new string[] { "displayname", "name", "gpcfilesyspath" });
+
+            ConcurrentQueue<string> INIResults = new ConcurrentQueue<string>();
+
+            Parallel.ForEach(gposearcher.FindAll().Cast<SearchResult>().ToArray(), (result) =>
+            {
+                string display = result.GetProp("displayname");
+                string name = result.GetProp("name");
+                string path = result.GetProp("gpcfilesyspath");
+
+                if (display == null || name == null || path == null)
+                {
+                    return;
+                }
+
+                string template = String.Format("{0}\\{1}", path, "MACHINE\\Microsoft\\Windows NT\\SecEdit\\GptTmpl.inf");
+
+                using (StreamReader sr = new StreamReader(template))
+                {
+                    string line = String.Empty;
+                    string currsection = String.Empty;
+                    while ((line = sr.ReadLine()) != null)
+                    {
+                        Match section = Regex.Match(line, @"^\[(.+)\]");
+                        if (section.Success)
+                        {
+                            currsection = section.Captures[0].Value.Trim();
+                        }
+
+                        if (!currsection.Equals("[Group Membership]"))
+                        {
+                            continue;
+                        }
+
+                        Match key = Regex.Match(line, @"(.+?)\s*=(.*)");
+                        if (key.Success)
+                        {
+                            string n = key.Groups[1].Value;
+                            string v = key.Groups[2].Value;
+                            if (n.Contains(targetsid))
+                            {
+                                v = v.Trim();
+                                List<String> members = v.Split(',').ToList();
+                                List<DBObject> resolved = new List<DBObject>();
+                                for (int i = 0; i < members.Count; i++)
+                                {
+                                    string m = members[i];
+                                    m = m.Trim('*');
+
+                                    string sid;
+                                    if (!m.StartsWith("S-1-", StringComparison.CurrentCulture))
+                                    {
+                                        try
+                                        {
+                                            sid = new System.Security.Principal.NTAccount(DomainName, m).Translate(typeof(System.Security.Principal.SecurityIdentifier)).Value;
+                                        }
+                                        catch
+                                        {
+                                            sid = null;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        sid = m;
+                                    }
+                                    if (sid == null)
+                                    {
+                                        continue;
+                                    }
+
+                                    string user = null;
+
+                                    if (manager.FindBySID(sid, CurrentDomain, out DBObject obj))
+                                    {
+                                        user = obj.BloodHoundDisplayName;
+                                    }
+                                    else
+                                    {
+                                        try
+                                        {
+                                            DirectoryEntry entry = new DirectoryEntry($"LDAP://<SID={sid}");
+                                            obj = entry.ConvertToDB();
+                                            manager.InsertRecord(obj);
+                                        }
+                                        catch
+                                        {
+                                            obj = null;
+                                        }
+                                    }
+
+                                    if (obj != null)
+                                    {
+                                        resolved.Add(obj);
+                                    }
+                                }
+                                DirectorySearcher OUSearch = helpers.GetDomainSearcher(DomainName);
+
+                                OUSearch.Filter = $"(&(objectCategory=organizationalUnit)(name=*)(gplink=*{name}*))";
+                                foreach (SearchResult r in OUSearch.FindAll())
+                                {
+                                    DirectorySearcher compsearcher = helpers.GetDomainSearcher(DomainName, ADSPath: r.GetProp("adspath"));
+                                    foreach (SearchResult ra in compsearcher.FindAll())
+                                    {
+                                        string sat = ra.GetProp("samaccounttype");
+                                        if (sat == null)
+                                        {
+                                            continue;
+                                        }
+
+                                        DBObject resultdb = ra.ConvertToDB();
+
+                                        if (sat.Equals("805306369"))
+                                        {
+                                            foreach (DBObject obj in resolved)
+                                            {
+                                                output.Add(new LocalAdminInfo
+                                                {
+                                                    objectname = obj.BloodHoundDisplayName,
+                                                    objecttype = obj.Type,
+                                                    server = resultdb.BloodHoundDisplayName
+                                                });
+                                            }
+                                        }
+                                    }
+                                    compsearcher.Dispose();
+                                }
+                                OUSearch.Dispose();
+                            }
+                        }
+                    }
+                }
+            });
+
+            gposearcher.Dispose();
+
+            output.CompleteAdding();
+
+            Console.WriteLine("Done GPO Correlation");
+        }
+
         #region Helpers
         private List<LocalAdminInfo> LocalGroupWinNT(string Target, string group)
         {
             DirectoryEntry members = new DirectoryEntry($"WinNT://{Target}/{group},group");
             List<LocalAdminInfo> users = new List<LocalAdminInfo>();
             string servername = Target.Split('.')[0].ToUpper();
-            foreach (object member in (System.Collections.IEnumerable)members.Invoke("Members"))
+            try
             {
-                using (DirectoryEntry m = new DirectoryEntry(member))
+                foreach (object member in (System.Collections.IEnumerable)members.Invoke("Members"))
                 {
-                    byte[] sid = m.GetPropBytes("objectsid");
-                    string sidstring = new SecurityIdentifier(sid, 0).ToString();
-                    if (manager.FindBySID(sidstring, out DBObject obj))
+                    using (DirectoryEntry m = new DirectoryEntry(member))
                     {
-                        users.Add(new LocalAdminInfo
+                        byte[] sid = m.GetPropBytes("objectsid");
+                        string sidstring = new SecurityIdentifier(sid, 0).ToString();
+                        if (manager.FindBySID(sidstring, CurrentDomain, out DBObject obj))
                         {
-                            objectname = obj.BloodHoundDisplayName,
-                            objecttype = obj.Type,
-                            server = Target
-                        });
+                            users.Add(new LocalAdminInfo
+                            {
+                                objectname = obj.BloodHoundDisplayName,
+                                objecttype = obj.Type,
+                                server = Target
+                            });
+                        }
                     }
                 }
             }
+            catch (COMException)
+            {
+                return users;
+            }
+            
 
             return users;
         }
@@ -235,33 +396,44 @@ namespace SharpHound.EnumerationSteps
             if (EntriesRead > 0)
             {
                 IntPtr iter = PtrInfo;
-                List<LOCALGROUP_MEMBERS_INFO_2> list = new List<LOCALGROUP_MEMBERS_INFO_2>();
+                LOCALGROUP_MEMBERS_INFO_2[] list = new LOCALGROUP_MEMBERS_INFO_2[EntriesRead];
+
                 for (int i = 0; i < EntriesRead; i++)
                 {
                     LOCALGROUP_MEMBERS_INFO_2 data = (LOCALGROUP_MEMBERS_INFO_2)Marshal.PtrToStructure(iter, LMI2);
+                    list[i] = data;
                     iter = (IntPtr)(iter.ToInt64() + Marshal.SizeOf(LMI2));
-                    list.Add(data);
+                }
+
+                List<API_Encapsulator> newlist = new List<API_Encapsulator>();
+                for (int i = 0; i < EntriesRead; i++)
+                {
+                    ConvertSidToStringSid(list[i].lgrmi2_sid, out string s);
+                    newlist.Add(new API_Encapsulator
+                    {
+                        lgmi2 = list[i],
+                        sid = s
+                    });
                 }
 
                 NetApiBufferFree(PtrInfo);
 
-                foreach (LOCALGROUP_MEMBERS_INFO_2 data in list)
+                foreach (API_Encapsulator data in newlist)
                 {
-                    ConvertSidToStringSid(data.lgrmi2_sid, out string s);
-                    if (s == null)
+                    if (data.sid == null)
                     {
                         continue;
                     }
-                    if (s.EndsWith("-500", StringComparison.CurrentCulture) && !(s.StartsWith(DomainSID, StringComparison.CurrentCulture)))
+                    if (data.sid.EndsWith("-500", StringComparison.CurrentCulture) && !(data.sid.StartsWith(DomainSID, StringComparison.CurrentCulture)))
                     {
-                        MachineSID = s.Substring(0, s.LastIndexOf("-", StringComparison.CurrentCulture));
+                        MachineSID = data.sid.Substring(0, data.sid.LastIndexOf("-", StringComparison.CurrentCulture));
                         break;
                     }
                 }
 
-                foreach (LOCALGROUP_MEMBERS_INFO_2 data in list)
+                foreach (API_Encapsulator data in newlist)
                 {
-                    string ObjectName = data.lgrmi2_domainandname;
+                    string ObjectName = data.lgmi2.lgrmi2_domainandname;
                     if (!ObjectName.Contains("\\"))
                     {
                         continue;
@@ -279,25 +451,25 @@ namespace SharpHound.EnumerationSteps
                     }
 
                     string ObjectType;
-                    ConvertSidToStringSid(data.lgrmi2_sid, out string ObjectSID);
-                    if (ObjectSID == null ||  ObjectSID.StartsWith(MachineSID, StringComparison.CurrentCulture))
+                    string ObjectSID = data.sid;
+                    if (ObjectSID == null ||  ObjectSID.StartsWith(MachineSID))
                     {
                         continue;
                     }
 
                     DBObject obj;
-                    switch (data.lgrmi2_sidusage)
+                    switch (data.lgmi2.lgrmi2_sidusage)
                     {
                         case (SID_NAME_USE.SidTypeUser):
-                            manager.FindUserBySID(ObjectSID, out obj);
+                            manager.FindUserBySID(ObjectSID, out obj, CurrentDomain);
                             ObjectType = "user";
                             break;
                         case (SID_NAME_USE.SidTypeComputer):
-                            manager.FindComputerBySID(ObjectSID, out obj);
+                            manager.FindComputerBySID(ObjectSID, out obj, CurrentDomain);
                             ObjectType = "computer";
                             break;
                         case (SID_NAME_USE.SidTypeGroup):
-                            manager.FindGroupBySID(ObjectSID, out obj);
+                            manager.FindGroupBySID(ObjectSID, out obj, CurrentDomain);
                             ObjectType = "group";
                             break;
                         default:
@@ -314,6 +486,7 @@ namespace SharpHound.EnumerationSteps
                             obj = entry.ConvertToDB();
                             if (obj == null)
                             {
+                                Console.WriteLine("c");
                                 continue;
                             }
                             manager.InsertRecord(obj);
@@ -379,6 +552,12 @@ namespace SharpHound.EnumerationSteps
             public string lgrmi2_domainandname;
         }
 
+        public class API_Encapsulator
+        {
+            public LOCALGROUP_MEMBERS_INFO_2 lgmi2 { get; set; }
+            public string sid;
+        }
+
         public enum SID_NAME_USE
         {
             SidTypeUser = 1,
@@ -397,150 +576,6 @@ namespace SharpHound.EnumerationSteps
 
         [DllImport("kernel32.dll", SetLastError = true)]
         static extern IntPtr LocalFree(IntPtr hMem);
-        #endregion
-
-        private void EnumerateGPOAdmin(string DomainName, BlockingCollection<LocalAdminInfo> output)
-        {
-            string targetsid = "S-1-5-32-544__Members";
-
-            Console.WriteLine("Starting GPO Correlation");
-
-            DirectorySearcher gposearcher = helpers.GetDomainSearcher(DomainName);
-            gposearcher.Filter = "(&(objectCategory=groupPolicyContainer)(name=*)(gpcfilesyspath=*))";
-            gposearcher.PropertiesToLoad.AddRange(new string[] { "displayname", "name", "gpcfilesyspath" });
-
-            ConcurrentQueue<string> INIResults = new ConcurrentQueue<string>();
-
-            Parallel.ForEach(gposearcher.FindAll().Cast<SearchResult>().ToArray(), (result) =>
-            {
-                string display = result.GetProp("displayname");
-                string name = result.GetProp("name");
-                string path  = result.GetProp("gpcfilesyspath");
-
-                if (display == null || name == null || path == null)
-                {
-                    return;
-                }
-
-                string template = String.Format("{0}\\{1}", path, "MACHINE\\Microsoft\\Windows NT\\SecEdit\\GptTmpl.inf");
-                
-                using (StreamReader sr = new StreamReader(template))
-                {
-                    string line = String.Empty;
-                    string currsection = String.Empty;
-                    while ((line = sr.ReadLine()) != null)
-                    {
-                        Match section = Regex.Match(line, @"^\[(.+)\]");
-                        if (section.Success)
-                        {
-                            currsection = section.Captures[0].Value.Trim();
-                        }
-                        
-                        if (!currsection.Equals("[Group Membership]"))
-                        {
-                            continue;
-                        }
-
-                        Match key = Regex.Match(line, @"(.+?)\s*=(.*)");
-                        if (key.Success)
-                        {
-                            string n = key.Groups[1].Value;
-                            string v = key.Groups[2].Value;
-                            if (n.Contains(targetsid))
-                            {
-                                v = v.Trim();
-                                List<String> members = v.Split(',').ToList();
-                                List<DBObject> resolved = new List<DBObject>();
-                                for (int i = 0; i < members.Count; i++)
-                                {
-                                    string m = members[i];
-                                    m = m.Trim('*');
-
-                                    string sid;
-                                    if (!m.StartsWith("S-1-", StringComparison.CurrentCulture))
-                                    {
-                                        try
-                                        {
-                                            sid = new System.Security.Principal.NTAccount(DomainName, m).Translate(typeof(System.Security.Principal.SecurityIdentifier)).Value;
-                                        }
-                                        catch
-                                        {
-                                            sid = null;
-                                        }
-                                    }
-                                    else
-                                    {
-                                        sid = m;
-                                    }
-                                    if (sid == null)
-                                    {
-                                        continue;
-                                    }
-
-                                    string user = null;
-
-                                    if (manager.FindBySID(sid, out DBObject obj))
-                                    {
-                                        user = obj.BloodHoundDisplayName;
-                                    }
-                                    else
-                                    {
-                                        try
-                                        {
-                                            DirectoryEntry entry = new DirectoryEntry($"LDAP://<SID={sid}");
-                                            obj = entry.ConvertToDB();
-                                            manager.InsertRecord(obj);
-                                        }
-                                        catch
-                                        {
-                                            obj = null;
-                                        }
-                                    }
-
-                                    if (obj != null)
-                                    {
-                                        resolved.Add(obj);
-                                    }
-                                }
-                                DirectorySearcher OUSearch = helpers.GetDomainSearcher(DomainName);
-                                
-                                OUSearch.Filter = $"(&(objectCategory=organizationalUnit)(name=*)(gplink=*{name}*))";
-                                foreach (SearchResult r in OUSearch.FindAll())
-                                {
-                                    DirectorySearcher compsearcher = helpers.GetDomainSearcher(DomainName, ADSPath: r.GetProp("adspath"));
-                                    foreach (SearchResult ra in compsearcher.FindAll())
-                                    {
-                                        string sat = ra.GetProp("samaccounttype");
-                                        if (sat == null)
-                                        {
-                                            continue;
-                                        }
-
-                                        DBObject resultdb = ra.ConvertToDB();
-
-                                        if (sat.Equals("805306369"))
-                                        {
-                                            foreach (DBObject obj in resolved)
-                                            {
-                                                output.Add(new LocalAdminInfo
-                                                {
-                                                    objectname = obj.BloodHoundDisplayName,
-                                                    objecttype = obj.Type,
-                                                    server = resultdb.BloodHoundDisplayName
-                                                });
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-
-            output.CompleteAdding();
-
-            Console.WriteLine("Done GPO Correlation");
-        }        
+        #endregion     
     }
 }

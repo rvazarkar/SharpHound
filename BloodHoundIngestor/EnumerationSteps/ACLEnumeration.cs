@@ -1,5 +1,4 @@
 ﻿using ExtensionMethods;
-using SharpHound.BaseClasses;
 using SharpHound.DatabaseObjects;
 using SharpHound.Objects;
 using SharpHound.OutputObjects;
@@ -19,16 +18,16 @@ namespace SharpHound.EnumerationSteps
 {
     class ACLEnumeration
     {
-        private Helpers helpers;
-        private Options options;
-        private DBManager manager;
+        Helpers helpers;
+        Options options;
+        DBManager manager;
 
-        private static int total;
-        private static int count;
-        private static string CurrentDomain;
-        private static Regex GenericRegex = new Regex("GenericAll|GenericWrite|WriteOwner|WriteDacl");
+        static int total;
+        static int count;
+        static string CurrentDomain;
+        static Regex GenericRegex = new Regex("GenericAll|GenericWrite|WriteOwner|WriteDacl");
 
-        private static ConcurrentDictionary<string, DCSync> syncers;
+        static ConcurrentDictionary<string, DCSync> syncers;
 
         public ACLEnumeration()
         {
@@ -104,8 +103,7 @@ namespace SharpHound.EnumerationSteps
 
                 foreach (string key in syncers.Keys)
                 {
-                    DCSync temp;
-                    if (syncers.TryGetValue(key, out temp))
+                    if (syncers.TryGetValue(key, out DCSync temp))
                     {
                         if (temp.CanDCSync())
                         {
@@ -122,12 +120,12 @@ namespace SharpHound.EnumerationSteps
             }
         }
 
-        private void Timer_Tick(object sender, System.Timers.ElapsedEventArgs args)
+        void Timer_Tick(object sender, System.Timers.ElapsedEventArgs args)
         {
             PrintStatus();
         }
 
-        private void PrintStatus()
+        void PrintStatus()
         {
             int c = ACLEnumeration.total;
             if (c == 0)
@@ -139,13 +137,13 @@ namespace SharpHound.EnumerationSteps
             Console.WriteLine(ProgressStr);
         }
 
-        private Task StartWriter(BlockingCollection<ACLInfo> output, TaskFactory factory)
+        Task StartWriter(BlockingCollection<ACLInfo> output, TaskFactory factory)
         {
             return factory.StartNew(() =>
             {
                 if (options.URI == null)
                 {
-                    string path = options.GetFilePath("acls.csv");
+                    string path = options.GetFilePath("acls");
                     bool append = false || File.Exists(path);
                     using (StreamWriter writer = new StreamWriter(path, append))
                     {
@@ -163,7 +161,7 @@ namespace SharpHound.EnumerationSteps
             });
         }
 
-        private Task StartConsumer(BlockingCollection<DBObject> input, BlockingCollection<ACLInfo> output, TaskFactory factory)
+        Task StartConsumer(BlockingCollection<DBObject> input, BlockingCollection<ACLInfo> output, TaskFactory factory)
         {
             return factory.StartNew(() =>
             {
@@ -174,7 +172,7 @@ namespace SharpHound.EnumerationSteps
                     foreach (QualifiedAce r in acls)
                     {
                         string PrincipalSID = r.SecurityIdentifier.ToString();
-                        
+
                         //Try to map our SID to the principal using a few different methods
                         if (!manager.FindBySID(PrincipalSID, CurrentDomain, out DBObject principal))
                         {
@@ -216,7 +214,7 @@ namespace SharpHound.EnumerationSteps
                         cont |= (rs.Equals("WriteDacl") || rs.Equals("WriteOwner"));
                         if (rs.Equals("GenericWrite") || rs.Equals("GenericAll"))
                             cont |= ("00000000-0000-0000-0000-000000000000".Equals(guid) || guid.Equals(""));
-                        
+
                         if (rs.Equals("ExtendedRight"))
                         {
                             cont |= (guid.Equals("00000000-0000-0000-0000-000000000000") || guid.Equals("00299570-246d-11d0-a768-00aa006e0529"));

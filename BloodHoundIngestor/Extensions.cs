@@ -1,12 +1,10 @@
 ﻿using SharpHound;
-using SharpHound.BaseClasses;
 using SharpHound.DatabaseObjects;
 using System;
 using System.Collections.Generic;
 using System.DirectoryServices;
 using System.Linq;
 using System.Security.Principal;
-using System.Text;
 
 namespace ExtensionMethods
 {
@@ -57,7 +55,7 @@ namespace ExtensionMethods
         {
             foreach (var name in result.Properties.PropertyNames)
             {
-                Console.WriteLine(name.ToString());
+                Console.WriteLine(name);
                 Console.WriteLine(result.GetProp(name.ToString()));
             }
         }

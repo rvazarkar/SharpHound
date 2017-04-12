@@ -4,22 +4,20 @@ using System.Collections.Generic;
 using System.DirectoryServices;
 using System.DirectoryServices.ActiveDirectory;
 using System.Net.NetworkInformation;
-using System.Runtime.InteropServices;
 using System.Security.Principal;
-using System.Text;
 
 namespace SharpHound
 {
     public class Helpers
     {
-        private static Helpers instance;
+        static Helpers instance;
 
-        private ConcurrentDictionary<string, Domain> DomainResolveCache;
-        private ConcurrentDictionary<string, string> SidConversionCache;
-        private ConcurrentDictionary<string, bool> PingCache;
-        private List<String> DomainList;
+        ConcurrentDictionary<string, Domain> DomainResolveCache;
+        ConcurrentDictionary<string, string> SidConversionCache;
+        ConcurrentDictionary<string, bool> PingCache;
+        List<String> DomainList;
 
-        private static Options options;
+        static Options options;
 
         public static ConcurrentDictionary<string, string> DomainMap = new ConcurrentDictionary<string, string>();
 
@@ -74,8 +72,7 @@ namespace SharpHound
             {
                 string DomainName = TargetDomain.Name;
                 string Server = TargetDomain.PdcRoleOwner.Name;
-                SearchString = "LDAP://";
-                SearchString += Server + "/";
+                SearchString = $"LDAP://{Server}/";
                 if (SearchBase != null)
                 {
                     SearchString += SearchBase;

@@ -8,8 +8,8 @@ namespace SharpHound
 {
     public class DBManager
     {
-        private LiteDatabase db;
-        private static DBManager instance;
+        LiteDatabase db;
+        static DBManager instance;
 
         public static void CreateInstance(string file = null)
         {
@@ -41,13 +41,13 @@ namespace SharpHound
             }
         }
 
-        private DBManager()
+        DBManager()
         {
             var mem = new MemoryStream();
             db = new LiteDatabase(mem);
         }
 
-        private DBManager(string file)
+        DBManager(string file)
         {
             db = new LiteDatabase(file);
         }

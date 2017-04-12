@@ -1,14 +1,10 @@
 ﻿using CommandLine;
-using CommandLine.Text;
 using SharpHound.EnumerationSteps;
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.DirectoryServices.ActiveDirectory;
 using System.IO;
-using System.Linq;
 using System.Security.Permissions;
-using System.Text;
 using static SharpHound.Options;
 
 namespace SharpHound
@@ -166,9 +162,9 @@ General Options
             return text;
         }
 
-        private string FormatOption(int level, string option, string values)
+        string FormatOption(int level, string option, string values)
         {
-            string spacing = new string('\t',level);
+            string spacing = new string('\t', level);
             string format = $"{spacing}{option}:\t{values}\n";
             return format;
         }
@@ -189,8 +185,12 @@ General Options
                 f = filename;
             }else
             {
-                f = CSVPrefix + "_" + filename;
+                f = $"{CSVPrefix}_{filename}";
             }
+
+            f = $"{f}_{DateTime.Now.ToString("yyyyMMddHHmmss")}.csv";
+            
+
             return Path.Combine(CSVFolder, f);
         }
     }
@@ -203,7 +203,7 @@ General Options
 
             AppDomain currentDomain = AppDomain.CurrentDomain;
             currentDomain.UnhandledException += new UnhandledExceptionEventHandler(MyHandler);
-            if (CommandLine.Parser.Default.ParseArguments(args, options))
+            if (Parser.Default.ParseArguments(args, options))
             {
                 Helpers.CreateInstance(options);
                 

@@ -1,4 +1,7 @@
-﻿using Microsoft.Win32;
+﻿using ExtensionMethods;
+using Microsoft.Win32;
+using SharpHound.DatabaseObjects;
+using SharpHound.OutputObjects;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -10,27 +13,24 @@ using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using ExtensionMethods;
-using SharpHound.OutputObjects;
-using SharpHound.DatabaseObjects;
 
 namespace SharpHound
 {
     class SessionEnumeration
     {
-        private Helpers helpers;
-        private Options options;
-        private DBManager manager;
+        Helpers helpers;
+        Options options;
+        DBManager manager;
 
-        private static int count;
-        private static int dead;
-        private static int total;
-        private static string CurrentDomain;
-        private static string CurrentUser;
-        private static string GCPath;
+        static int count;
+        static int dead;
+        static int total;
+        static string CurrentDomain;
+        static string CurrentUser;
+        static string GCPath;
 
-        private static ConcurrentDictionary<string, DBObject> sidmap;
-        private static ConcurrentDictionary<string, string> ResolveCache;
+        static ConcurrentDictionary<string, DBObject> sidmap;
+        static ConcurrentDictionary<string, string> ResolveCache;
 
         public SessionEnumeration()
         {
@@ -152,13 +152,13 @@ namespace SharpHound
             overwatch.Stop();
         }
 
-        private Task StartWriter(BlockingCollection<SessionInfo> output, TaskFactory factory)
+        Task StartWriter(BlockingCollection<SessionInfo> output, TaskFactory factory)
         {
             return factory.StartNew(() =>
             {
                 if (options.URI == null)
                 {
-                    string path = options.GetFilePath("sessions.csv");
+                    string path = options.GetFilePath("sessions");
                     bool append = false || File.Exists(path);
                     using (StreamWriter writer = new StreamWriter(path, append))
                     {
@@ -176,7 +176,7 @@ namespace SharpHound
             });
         }
 
-        private Task StartConsumer(BlockingCollection<Computer> input, BlockingCollection<SessionInfo> output, TaskFactory factory)
+        Task StartConsumer(BlockingCollection<Computer> input, BlockingCollection<SessionInfo> output, TaskFactory factory)
         {
             return factory.StartNew(() =>
             {
@@ -208,7 +208,7 @@ namespace SharpHound
         }
 
         #region Helpers
-        private List<SessionInfo> GetNetLoggedOn(string server, string SaMAccountName)
+        List<SessionInfo> GetNetLoggedOn(string server, string SaMAccountName)
         {
             List<SessionInfo> results = new List<SessionInfo>();
 
@@ -248,7 +248,7 @@ namespace SharpHound
                         resolved = helpers.GetDomain(domain).Name;
                         Helpers.DomainMap.TryAdd(domain, resolved);
                         MemberName = $"{username.ToUpper()}@{domain}";
-                    }                    
+                    }
 
                     results.Add(new SessionInfo()
                     {
@@ -263,7 +263,7 @@ namespace SharpHound
             return results;
         }
 
-        private List<SessionInfo> GetLocalLoggedOn(string server, string SaMAccountName)
+        List<SessionInfo> GetLocalLoggedOn(string server, string SaMAccountName)
         {
             List<SessionInfo> results = new List<SessionInfo>();
 
@@ -345,7 +345,7 @@ namespace SharpHound
             return results;
         }
 
-        private List<SessionInfo> GetNetSessions(string server, string ComputerDomain)
+        List<SessionInfo> GetNetSessions(string server, string ComputerDomain)
         {
             List<SessionInfo> toReturn = new List<SessionInfo>();
             IntPtr PtrInfo = IntPtr.Zero;
@@ -433,12 +433,12 @@ namespace SharpHound
                         manager.InsertGCObject(obj);
                     }
                 }
-                
+
                 if (DNSHostName == null)
                 {
                     DNSHostName = cname;
                 }
-                
+
                 if (obj.PossibleNames.Count == 0)
                 {
                     //We didn't find the object in the GC at all. Default to computer domain
@@ -448,7 +448,8 @@ namespace SharpHound
                         UserName = $"{username}@{ComputerDomain}",
                         Weight = 2
                     });
-                }else if (obj.PossibleNames.Count == 1)
+                }
+                else if (obj.PossibleNames.Count == 1)
                 {
                     //We found only one instance of the object
                     toReturn.Add(new SessionInfo
@@ -464,7 +465,8 @@ namespace SharpHound
                     foreach (string p in obj.PossibleNames)
                     {
                         int weight;
-                        if (p.ToUpper().Equals(ComputerDomain.ToUpper())){
+                        if (p.ToUpper().Equals(ComputerDomain.ToUpper()))
+                        {
                             weight = 1;
                         }
                         else
@@ -487,7 +489,7 @@ namespace SharpHound
 
         #region pinvoke imports
         [DllImport("NetAPI32.dll", SetLastError = true)]
-        private static extern int NetSessionEnum(
+        static extern int NetSessionEnum(
             [MarshalAs(UnmanagedType.LPWStr)] string ServerName,
             [MarshalAs(UnmanagedType.LPWStr)] string UncClientName,
             [MarshalAs(UnmanagedType.LPWStr)] string UserName,
@@ -559,12 +561,12 @@ namespace SharpHound
             IntPtr Buff);
         #endregion
 
-        private void Timer_Tick(object sender, System.Timers.ElapsedEventArgs args)
+        void Timer_Tick(object sender, System.Timers.ElapsedEventArgs args)
         {
             PrintStatus();
         }
 
-        private void PrintStatus()
+        void PrintStatus()
         {
             int c = SessionEnumeration.total;
             int p = SessionEnumeration.count;

@@ -6,7 +6,6 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.DirectoryServices;
-using System.DirectoryServices.ActiveDirectory;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
@@ -14,12 +13,14 @@ namespace SharpHound.EnumerationSteps
 {
     class SidCacheBuilder
     {
-        private Helpers helpers;
-        private Options options;
+        Helpers helpers;
+        Options options;
         DBManager dbmanager;
-        public static int last;
-        public static int count;
-        Stopwatch watch = Stopwatch.StartNew();
+
+        static int last;
+        static int count;
+        static Stopwatch watch = Stopwatch.StartNew();
+        static string CurrentDomain;
 
         public SidCacheBuilder()
         {
@@ -39,7 +40,6 @@ namespace SharpHound.EnumerationSteps
             
             String[] props = { "samaccountname", "distinguishedname", "dnshostname", "samaccounttype", "primarygroupid", "memberof", "objectsid", "objectclass", "ntsecuritydescriptor", "serviceprincipalname", "homedirectory","scriptpath","profilepath" };
 
-            Stopwatch watch = Stopwatch.StartNew();
             Stopwatch overwatch = Stopwatch.StartNew();
             bool DidEnumerate = false;
 
@@ -51,6 +51,9 @@ namespace SharpHound.EnumerationSteps
                     continue;
                 }
                 DidEnumerate = true;
+
+                CurrentDomain = DomainName;
+
                 Console.WriteLine();
                 Console.WriteLine("Building database for " + DomainName);
 
@@ -115,18 +118,22 @@ namespace SharpHound.EnumerationSteps
             watch.Stop();
         }
 
-        private void Timer_Tick(object sender, System.Timers.ElapsedEventArgs args)
+        void Timer_Tick(object sender, System.Timers.ElapsedEventArgs args)
         {
             PrintStatus();
         }
 
-        private void PrintStatus()
+        void PrintStatus()
         {
-            Console.WriteLine(string.Format("{0} done (+{1}) ({2}/s) ({3})", count, count - last, (float)((count - last) / (options.Interval / 1000)), watch.Elapsed));
+            int p = count;
+            int l = last;
+            float ps = (float)(count / watch.Elapsed.TotalSeconds);
+            string progress = $"Building cache for domain {CurrentDomain}: {p} completed (+{l}, {ps}/s)";
+            Console.WriteLine(progress);
             last = count;
         }
 
-        private static Task StartWriter(BlockingCollection<DBObject> output, TaskFactory factory)
+        static Task StartWriter(BlockingCollection<DBObject> output, TaskFactory factory)
         {
             return factory.StartNew(() =>
             {
@@ -137,7 +144,6 @@ namespace SharpHound.EnumerationSteps
                 var domainacl = db.GetCollection<DomainACL>("domainacl");
 
                 var transaction = db.BeginTrans();
-                Stopwatch watch = Stopwatch.StartNew();
 
                 foreach (DBObject obj in output.GetConsumingEnumerable())
                 {
@@ -169,12 +175,12 @@ namespace SharpHound.EnumerationSteps
             });
         }
 
-        private static Task StartConsumer(BlockingCollection<SearchResult> input, 
-           BlockingCollection<DBObject> output, 
+        static Task StartConsumer(BlockingCollection<SearchResult> input,
+           BlockingCollection<DBObject> output,
            TaskFactory factory)
         {
             return factory.StartNew(() =>
-            {                
+            {
                 foreach (SearchResult r in input.GetConsumingEnumerable())
                 {
                     output.Add(r.ConvertToDB());
@@ -326,7 +332,7 @@ namespace SharpHound.EnumerationSteps
 
         #region PINVOKE
         [Flags]
-        private enum TRUST_TYPE : uint
+        enum TRUST_TYPE : uint
         {
             DS_DOMAIN_IN_FOREST = 0x0001,  // Domain is a member of the forest
             DS_DOMAIN_DIRECT_OUTBOUND = 0x0002,  // Domain is directly trusted
@@ -337,7 +343,7 @@ namespace SharpHound.EnumerationSteps
         }
 
         [Flags]
-        private enum TRUST_ATTRIB : uint
+        enum TRUST_ATTRIB : uint
         {
             NON_TRANSITIVE = 0x0001,
             UPLEVEL_ONLY = 0x0002,
@@ -349,7 +355,7 @@ namespace SharpHound.EnumerationSteps
         }
 
         [StructLayout(LayoutKind.Sequential)]
-        private struct DS_DOMAIN_TRUSTS
+        struct DS_DOMAIN_TRUSTS
         {
             [MarshalAs(UnmanagedType.LPTStr)]
             public string NetbiosDomainName;
@@ -362,15 +368,15 @@ namespace SharpHound.EnumerationSteps
             public IntPtr DomainSid;
             public Guid DomainGuid;
         }
-        
+
         [DllImport("Netapi32.dll", CallingConvention = CallingConvention.Winapi, SetLastError = true, CharSet = CharSet.Auto)]
-        private static extern uint DsEnumerateDomainTrusts(string ServerName,
+        static extern uint DsEnumerateDomainTrusts(string ServerName,
                             uint Flags,
                             out IntPtr Domains,
                             out uint DomainCount);
 
         [DllImport("Netapi32.dll", EntryPoint = "NetApiBufferFree")]
-        private static extern uint NetApiBufferFree(IntPtr buffer);
+        static extern uint NetApiBufferFree(IntPtr buffer);
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
         struct DOMAIN_CONTROLLER_INFO

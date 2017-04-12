@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -11,13 +10,13 @@ namespace SharpHound
     {
         /// <summary>Whether the current thread is processing work items.</summary>
         [ThreadStatic]
-        private static bool _currentThreadIsProcessingItems;
+        static bool _currentThreadIsProcessingItems;
         /// <summary>The list of tasks to be executed.</summary>
-        private readonly LinkedList<Task> _tasks = new LinkedList<Task>(); // protected by lock(_tasks)
+        readonly LinkedList<Task> _tasks = new LinkedList<Task>(); // protected by lock(_tasks)
         /// <summary>The maximum concurrency level allowed by this scheduler.</summary>
-        private readonly int _maxDegreeOfParallelism;
+        readonly int _maxDegreeOfParallelism;
         /// <summary>Whether the scheduler is currently processing work items.</summary>
-        private int _delegatesQueuedOrRunning = 0; // protected by lock(_tasks)
+        int _delegatesQueuedOrRunning = 0; // protected by lock(_tasks)
 
         /// <summary>
         /// Initializes an instance of the LimitedConcurrencyLevelTaskScheduler class with the
@@ -50,7 +49,7 @@ namespace SharpHound
         /// <summary>
         /// Informs the ThreadPool that there's work to be executed for this scheduler.
         /// </summary>
-        private void NotifyThreadPoolOfPendingWork()
+        void NotifyThreadPoolOfPendingWork()
         {
             ThreadPool.UnsafeQueueUserWorkItem(_ =>
             {

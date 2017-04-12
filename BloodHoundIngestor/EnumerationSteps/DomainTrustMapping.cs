@@ -1,9 +1,6 @@
-﻿using SharpHound.BaseClasses;
-using SharpHound.DatabaseObjects;
+﻿using SharpHound.DatabaseObjects;
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.DirectoryServices.ActiveDirectory;
 using System.IO;
 using System.Threading.Tasks;
 
@@ -11,9 +8,9 @@ namespace SharpHound.EnumerationSteps
 {
     class DomainTrustMapping
     {
-        private Helpers Helpers;
-        private Options options;
-        private DBManager db;
+        Helpers Helpers;
+        Options options;
+        DBManager db;
 
 
         public DomainTrustMapping()
@@ -39,20 +36,20 @@ namespace SharpHound.EnumerationSteps
             Console.WriteLine("Finished Domain Trusts\n");
         }
 
-        private Task CreateWriter(BlockingCollection<DomainTrust> output)
+        Task CreateWriter(BlockingCollection<DomainTrust> output)
         {
             return Task.Factory.StartNew(() =>
             {
                 if (options.URI == null)
                 {
-                    string path = options.GetFilePath("trusts.csv");
+                    string path = options.GetFilePath("trusts");
                     bool append = false || File.Exists(path);
                     using (StreamWriter writer = new StreamWriter(path, append))
                     {
                         if (!append)
                         {
                             writer.WriteLine("SourceDomain,TargetDomain,TrustDirection,TrustType,Transitive");
-                        }                        
+                        }
                         writer.AutoFlush = true;
                         foreach (DomainTrust info in output.GetConsumingEnumerable())
                         {
@@ -61,7 +58,7 @@ namespace SharpHound.EnumerationSteps
                     }
                 }
             });
-            
+
         }
 
     }

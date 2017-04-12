@@ -18,11 +18,11 @@ namespace SharpHound.EnumerationSteps
 {
     class DomainGroupEnumeration
     {
-        private Helpers Helpers;
-        private Options options;
-        private DBManager manager;
+        Helpers Helpers;
+        Options options;
+        DBManager manager;
 
-        private static int progress;
+        static int progress;
         private static int totalcount;
         private static string CurrentDomain;
 
@@ -131,7 +131,7 @@ namespace SharpHound.EnumerationSteps
             PrintStatus();
         }
 
-        private void PrintStatus()
+        void PrintStatus()
         {
             int c = DomainGroupEnumeration.totalcount;
             if (c == 0)
@@ -143,7 +143,7 @@ namespace SharpHound.EnumerationSteps
             Console.WriteLine(ProgressStr);
         }
 
-        private Task StartConsumer(BlockingCollection<DBObject> input, BlockingCollection<GroupMembershipInfo> output, ConcurrentDictionary<string,DBObject> dnmap, TaskFactory factory, DBManager db)
+        Task StartConsumer(BlockingCollection<DBObject> input, BlockingCollection<GroupMembershipInfo> output, ConcurrentDictionary<string, DBObject> dnmap, TaskFactory factory, DBManager db)
         {
             return factory.StartNew(() =>
             {
@@ -177,7 +177,7 @@ namespace SharpHound.EnumerationSteps
                                 string ObjectSidString = new SecurityIdentifier(entry.Properties["objectSid"].Value as byte[], 0).ToString();
                                 List<string> memberof = entry.GetPropArray("memberOf");
                                 string samaccountname = entry.GetProp("samaccountname");
-                                string DomainName = dn.Substring(dn.IndexOf("DC=")).Replace("DC=", "").Replace(",", ".");
+                                string DomainName = dn.Substring(dn.IndexOf("DC=", StringComparison.Ordinal)).Replace("DC=", "").Replace(",", ".");
                                 string BDisplay = string.Format("{0}@{1}", samaccountname.ToUpper(), DomainName);
 
                                 g = new Group
@@ -206,7 +206,7 @@ namespace SharpHound.EnumerationSteps
                                 }
                                 else
                                 {
-                                    GroupName = dn.Substring(0, dn.IndexOf(",")).Split('=').Last();
+                                    GroupName = dn.Substring(0, dn.IndexOf(",", StringComparison.Ordinal)).Split('=').Last();
                                 }
 
                                 g = new Group
@@ -231,8 +231,8 @@ namespace SharpHound.EnumerationSteps
 
                     if (obj.PrimaryGroupID != null)
                     {
-                        
-                        string domainsid = obj.SID.Substring(0, obj.SID.LastIndexOf("-"));
+
+                        string domainsid = obj.SID.Substring(0, obj.SID.LastIndexOf("-", StringComparison.Ordinal));
                         string pgsid = $"{domainsid}-{obj.PrimaryGroupID}";
 
                         if (db.FindGroupBySID(pgsid, out DBObject g, CurrentDomain))
@@ -287,16 +287,16 @@ namespace SharpHound.EnumerationSteps
                     }
                     Interlocked.Increment(ref DomainGroupEnumeration.progress);
                 }
-            }); 
+            });
         }
 
-        private Task StartWriter(BlockingCollection<GroupMembershipInfo> output, Options _options, TaskFactory factory)
+        Task StartWriter(BlockingCollection<GroupMembershipInfo> output, Options _options, TaskFactory factory)
         {
             return factory.StartNew(() =>
             {
                 if (_options.URI == null)
                 {
-                    string path = _options.GetFilePath("group_memberships.csv");
+                    string path = _options.GetFilePath("group_memberships");
                     bool append = false || File.Exists(path);
                     using (StreamWriter writer = new StreamWriter(path, append))
                     {
@@ -355,7 +355,7 @@ namespace SharpHound.EnumerationSteps
                     Domain = ObjectName.Split('/')[0];
                     break;
                 case ADSTypes.ADS_NAME_TYPE_DN:
-                    Domain = ObjectName.Substring(ObjectName.IndexOf("DC=")).Replace("DC=", "").Replace(",", ".");
+                    Domain = ObjectName.Substring(ObjectName.IndexOf("DC=", StringComparison.Ordinal)).Replace("DC=", "").Replace(",", ".");
                     break;
                 default:
                     Domain = "";

@@ -18,7 +18,7 @@ namespace SharpHound.OutputObjects
 
         public string ToCSV()
         {
-            return String.Format("{0},{1},{2},{3},{4},{5},{6},{7}",ObjectName,ObjectType,PrincipalName,PrincipalType,RightName,AceType,Qualifier,Inherited);
+            return $"{ObjectName},{ObjectType},{PrincipalName},{PrincipalType},{RightName},{AceType},{Qualifier},{Inherited}";
         }
     }
 }

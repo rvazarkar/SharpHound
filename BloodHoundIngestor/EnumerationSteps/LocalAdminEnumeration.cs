@@ -1,5 +1,4 @@
 ﻿using ExtensionMethods;
-using SharpHound.BaseClasses;
 using SharpHound.DatabaseObjects;
 using SharpHound.Exceptions;
 using SharpHound.OutputObjects;
@@ -20,14 +19,14 @@ namespace SharpHound.EnumerationSteps
 {
     class LocalAdminEnumeration
     {
-        private Helpers helpers;
-        private Options options;
-        private DBManager manager;
+        Helpers helpers;
+        Options options;
+        DBManager manager;
 
-        private static int count;
-        private static int dead;
-        private static int total;
-        private static string CurrentDomain;
+        static int count;
+        static int dead;
+        static int total;
+        static string CurrentDomain;
 
         public LocalAdminEnumeration()
         {
@@ -100,27 +99,27 @@ namespace SharpHound.EnumerationSteps
             overwatch.Stop();
         }
 
-        private void Timer_Tick(object sender, System.Timers.ElapsedEventArgs args)
+        void Timer_Tick(object sender, System.Timers.ElapsedEventArgs args)
         {
             PrintStatus();
         }
 
-        private void PrintStatus()
+        void PrintStatus()
         {
             int c = LocalAdminEnumeration.total;
             int p = LocalAdminEnumeration.count;
             int d = LocalAdminEnumeration.dead;
-            string progress = $"Local Admin Enumeration for {LocalAdminEnumeration.CurrentDomain} - {count}/{total} ({(float)(((dead+count) / total) * 100)}%) completed. ({count} hosts alive)";
+            string progress = $"Local Admin Enumeration for {LocalAdminEnumeration.CurrentDomain} - {count}/{total} ({(float)(((dead + count) / total) * 100)}%) completed. ({count} hosts alive)";
             Console.WriteLine(progress);
         }
 
-        private Task StartWriter(BlockingCollection<LocalAdminInfo> output, TaskFactory factory)
+        Task StartWriter(BlockingCollection<LocalAdminInfo> output, TaskFactory factory)
         {
             return factory.StartNew(() =>
             {
                 if (options.URI == null)
                 {
-                    string path = options.GetFilePath("local_admins.csv");
+                    string path = options.GetFilePath("local_admins");
                     bool append = false || File.Exists(path);
                     using (StreamWriter writer = new StreamWriter(path, append))
                     {
@@ -188,7 +187,7 @@ namespace SharpHound.EnumerationSteps
             });
         }
 
-        private void EnumerateGPOAdmin(string DomainName, BlockingCollection<LocalAdminInfo> output)
+        void EnumerateGPOAdmin(string DomainName, BlockingCollection<LocalAdminInfo> output)
         {
             string targetsid = "S-1-5-32-544__Members";
 
@@ -250,7 +249,7 @@ namespace SharpHound.EnumerationSteps
                                     {
                                         try
                                         {
-                                            sid = new System.Security.Principal.NTAccount(DomainName, m).Translate(typeof(System.Security.Principal.SecurityIdentifier)).Value;
+                                            sid = new NTAccount(DomainName, m).Translate(typeof(SecurityIdentifier)).Value;
                                         }
                                         catch
                                         {
@@ -337,7 +336,7 @@ namespace SharpHound.EnumerationSteps
         }
 
         #region Helpers
-        private List<LocalAdminInfo> LocalGroupWinNT(string Target, string group)
+        List<LocalAdminInfo> LocalGroupWinNT(string Target, string group)
         {
             DirectoryEntry members = new DirectoryEntry($"WinNT://{Target}/{group},group");
             List<LocalAdminInfo> users = new List<LocalAdminInfo>();
@@ -366,12 +365,12 @@ namespace SharpHound.EnumerationSteps
             {
                 return users;
             }
-            
+
 
             return users;
         }
 
-        private List<LocalAdminInfo> LocalGroupAPI(string Target, string group, string DomainSID)
+        List<LocalAdminInfo> LocalGroupAPI(string Target, string group, string DomainSID)
         {
             int QueryLevel = 2;
             IntPtr PtrInfo = IntPtr.Zero;
@@ -411,7 +410,7 @@ namespace SharpHound.EnumerationSteps
                     ConvertSidToStringSid(list[i].lgrmi2_sid, out string s);
                     newlist.Add(new API_Encapsulator
                     {
-                        lgmi2 = list[i],
+                        Lgmi2 = list[i],
                         sid = s
                     });
                 }
@@ -433,7 +432,7 @@ namespace SharpHound.EnumerationSteps
 
                 foreach (API_Encapsulator data in newlist)
                 {
-                    string ObjectName = data.lgmi2.lgrmi2_domainandname;
+                    string ObjectName = data.Lgmi2.lgrmi2_domainandname;
                     if (!ObjectName.Contains("\\"))
                     {
                         continue;
@@ -452,13 +451,13 @@ namespace SharpHound.EnumerationSteps
 
                     string ObjectType;
                     string ObjectSID = data.sid;
-                    if (ObjectSID == null ||  ObjectSID.StartsWith(MachineSID))
+                    if (ObjectSID == null || ObjectSID.StartsWith(MachineSID, StringComparison.Ordinal))
                     {
                         continue;
                     }
 
                     DBObject obj;
-                    switch (data.lgmi2.lgrmi2_sidusage)
+                    switch (data.Lgmi2.lgrmi2_sidusage)
                     {
                         case (SID_NAME_USE.SidTypeUser):
                             manager.FindUserBySID(ObjectSID, out obj, CurrentDomain);
@@ -477,7 +476,7 @@ namespace SharpHound.EnumerationSteps
                             ObjectType = null;
                             break;
                     }
-                    
+
                     if (obj == null)
                     {
                         DirectoryEntry entry = new DirectoryEntry($"LDAP://<SID={ObjectSID}>");
@@ -554,7 +553,7 @@ namespace SharpHound.EnumerationSteps
 
         public class API_Encapsulator
         {
-            public LOCALGROUP_MEMBERS_INFO_2 lgmi2 { get; set; }
+            public LOCALGROUP_MEMBERS_INFO_2 Lgmi2 { get; set; }
             public string sid;
         }
 

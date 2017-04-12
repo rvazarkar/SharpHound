@@ -122,6 +122,23 @@ namespace SharpHound.EnumerationSteps
             }
         }
 
+        private void Timer_Tick(object sender, System.Timers.ElapsedEventArgs args)
+        {
+            PrintStatus();
+        }
+
+        private void PrintStatus()
+        {
+            int c = ACLEnumeration.total;
+            if (c == 0)
+            {
+                return;
+            }
+            int p = ACLEnumeration.count;
+            string ProgressStr = $"ACL Enumeration for {ACLEnumeration.CurrentDomain} - {p}/{c} ({(float)((p / c) * 100)}%) completed.";
+            Console.WriteLine(ProgressStr);
+        }
+
         private Task StartWriter(BlockingCollection<ACLInfo> output, TaskFactory factory)
         {
             return factory.StartNew(() =>
@@ -282,23 +299,5 @@ namespace SharpHound.EnumerationSteps
                 }
             });
         }
-
-        private void Timer_Tick(object sender, System.Timers.ElapsedEventArgs args)
-        {
-            PrintStatus();
-        }
-
-        private void PrintStatus()
-        {
-            int c = ACLEnumeration.total;
-            if (c == 0)
-            {
-                return;
-            }
-            int p = ACLEnumeration.count;
-            string ProgressStr = $"Group Enumeration for {ACLEnumeration.CurrentDomain} - {p}/{c} ({(float)((p / c) * 100)}%) completed.";
-            Console.WriteLine(ProgressStr);
-        }
-
     }
 }

@@ -127,11 +127,12 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="app.config" />
-    <None Include="PowerShell Ref\BloodHound.ps1" />
-    <None Include="PowerShell Ref\bloodhound_acl.ps1" />
+    <None Include="PowerShell\BloodHound.ps1" />
+    <None Include="PowerShell\bloodhound_acl.ps1" />
     <None Include="packages.config" />
-    <None Include="PowerShell Ref\PowerView.ps1" />
-    <None Include="PowerShell Ref\PowerView1.ps1" />
+    <None Include="PowerShell\Out-CompressedDLL.ps1" />
+    <None Include="PowerShell\PowerView.ps1" />
+    <None Include="PowerShell\PowerView1.ps1" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="favicon.ico" />
@@ -183,6 +184,9 @@ foreach (var item in filesToCleanup)
     </PropertyGroup>
     <Error Condition="!Exists('..\packages\Fody.1.29.4\build\portable-net+sl+win+wpa+wp\Fody.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Fody.1.29.4\build\portable-net+sl+win+wpa+wp\Fody.targets'))" />
   </Target>
+  <PropertyGroup>
+    <PostBuildEvent>powershell -ep bypass -c ". $(SolutionDir)\BloodHoundIngestor\Powershell\Out-CompressedDLL.ps1;Out-CompressedDll -FilePath $(TargetPath) | Out-File -Encoding ASCII compressed.ps1"</PostBuildEvent>
+  </PropertyGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
   <Target Name="BeforeBuild">

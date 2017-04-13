@@ -194,7 +194,7 @@ General Options
             return Path.Combine(CSVFolder, f);
         }
     }
-    class BloodHoundIngestor
+    class Program
     {
         [SecurityPermission(SecurityAction.Demand, Flags = SecurityPermissionFlag.ControlAppDomain)]
         static void Main(string[] args)
@@ -210,8 +210,8 @@ General Options
                 Domain d = Helpers.Instance.GetDomain(options.Domain);
                 if (d == null)
                 {
-                    Console.WriteLine("Unable to contact domain or invalid domain specified");
-                    Environment.Exit(0);
+                    Console.WriteLine("Unable to contact domain or invalid domain specified. Exiting");
+                    return;
                 }
                 Stopwatch overwatch = Stopwatch.StartNew();
 
@@ -278,6 +278,11 @@ General Options
                 overwatch.Stop();
             }
             
+        }
+
+        public static void InvokeBloodHound(string[] args)
+        {
+            Main(args);
         }
 
         static void MyHandler(object sender, UnhandledExceptionEventArgs args)

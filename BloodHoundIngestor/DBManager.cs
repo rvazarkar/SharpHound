@@ -52,6 +52,11 @@ namespace SharpHound
             db = new LiteDatabase(file);
         }
 
+        public void Dispose()
+        {
+            db.Dispose();
+        }
+
         public void UpdateDBMap()
         {
             var domains = db.GetCollection<DomainDB>("domains");

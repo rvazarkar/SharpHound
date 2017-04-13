@@ -48,8 +48,7 @@ Original script at https://github.com/PowerShellMafia/PowerSploit/blob/master/Sc
 	`$BindingFlags = [Reflection.BindingFlags] "Public,Static"
 	`$a = @()
 	`$Assembly.GetType("Costura.AssemblyLoader", `$false).GetMethod("Attach", `$BindingFlags).Invoke(`$Null, @())
-	`$b = [string[]]`$args
-	`$Assembly.GetType("SharpHound.Program").GetMethod("InvokeBloodHound").Invoke(`$Null, @(,`$b))
+	`$Assembly.GetType("SharpHound.Program").GetMethod("InvokeBloodHound").Invoke(`$Null, @(,`$passed))
 "@
 
 	Get-Content "..\..\PowerShell\Template.ps1" | %{$_ -replace "#ENCODEDCONTENTHERE", $Output} | Write-Output

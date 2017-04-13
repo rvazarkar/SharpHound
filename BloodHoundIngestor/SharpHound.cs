@@ -273,6 +273,8 @@ General Options
                     File.Delete(options.DBName);
                 }
 
+                DBManager.Instance.Dispose();
+
                 Console.WriteLine();
                 Console.WriteLine($"SharpHound finished all enumeration in {overwatch.Elapsed}");
                 overwatch.Stop();

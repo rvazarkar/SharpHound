@@ -66,7 +66,7 @@ namespace SharpHound
         [Option('i', "Interval", DefaultValue =30000,HelpText ="Interval in Milliseconds to display progress")]
         public int Interval { get; set; }
 
-        [Option("db", DefaultValue ="BloodHound.db", HelpText ="Filename of the DB Cache")]
+        [Option("DBFileName", DefaultValue ="BloodHound.db", HelpText ="Filename of the DB Cache")]
         public string DBName { get; set; }
 
         [Option("ForceRebuild", DefaultValue =false, HelpText ="Rebuild database cache")]

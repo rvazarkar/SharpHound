@@ -135,6 +135,7 @@ Output Options
     --URI (Default: """")
         The URI for the Neo4j REST API
         Setting this option will disable CSV output
+        Format is SERVER:PORT
 
     --UserPass (Default: """")
         username:password for the Neo4j REST API
@@ -163,13 +164,6 @@ General Options
             return text;
         }
 
-        string FormatOption(int level, string option, string values)
-        {
-            string spacing = new string('\t', level);
-            string format = $"{spacing}{option}:\t{values}\n";
-            return format;
-        }
-
         public void WriteVerbose(string Message)
         {
             if (Verbose)
@@ -182,6 +176,10 @@ General Options
         {
             var plainTextBytes = System.Text.Encoding.UTF8.GetBytes(UserPass);
             return Convert.ToBase64String(plainTextBytes);
+        }
+        public string GetURI()
+        {
+            return $"http://{URI}/db/data/transaction/commit";
         }
 
         public string GetFilePath(string filename)

@@ -75,7 +75,7 @@ namespace SharpHound.EnumerationSteps
                             LiteDB.Query.EQ("Domain", DomainName),
                             LiteDB.Query.Or(
                                 LiteDB.Query.GT("MemberOf.Count", 0),
-                                LiteDB.Query.Not(LiteDB.Query.EQ("PrimaryGroupId", null)))));
+                                LiteDB.Query.Not(LiteDB.Query.EQ("PrimaryGroupID", null)))));
 
                 var groups =
                     manager.GetGroups().Find(
@@ -83,14 +83,14 @@ namespace SharpHound.EnumerationSteps
                             LiteDB.Query.EQ("Domain", DomainName),
                             LiteDB.Query.Or(
                                 LiteDB.Query.GT("MemberOf.Count", 0),
-                                LiteDB.Query.Not(LiteDB.Query.EQ("PrimaryGroupId", null)))));
+                                LiteDB.Query.Not(LiteDB.Query.EQ("PrimaryGroupID", null)))));
                 var computers =
                     manager.GetComputers().Find(
                         LiteDB.Query.And(
                             LiteDB.Query.EQ("Domain", DomainName),
                             LiteDB.Query.Or(
                                 LiteDB.Query.GT("MemberOf.Count", 0),
-                                LiteDB.Query.Not(LiteDB.Query.EQ("PrimaryGroupId", null)))));
+                                LiteDB.Query.Not(LiteDB.Query.EQ("PrimaryGroupID", null)))));
 
                 totalcount = users.Count() + groups.Count() + computers.Count();
 
@@ -233,7 +233,6 @@ namespace SharpHound.EnumerationSteps
 
                     if (obj.PrimaryGroupID != null)
                     {
-
                         string domainsid = obj.SID.Substring(0, obj.SID.LastIndexOf("-", StringComparison.Ordinal));
                         string pgsid = $"{domainsid}-{obj.PrimaryGroupID}";
 
@@ -360,7 +359,7 @@ namespace SharpHound.EnumerationSteps
 
                                 try
                                 {
-                                    client.UploadData("http://localhost:7474/db/data/transaction/commit", "POST", Encoding.Default.GetBytes(ToPost));
+                                    client.UploadData(options.GetURI(), "POST", Encoding.Default.GetBytes(ToPost));
                                 }
                                 catch (Exception e)
                                 {
@@ -380,7 +379,7 @@ namespace SharpHound.EnumerationSteps
 
                         try
                         {
-                            client.UploadData("http://localhost:7474/db/data/transaction/commit", "POST", Encoding.Default.GetBytes(FinalPost));
+                            client.UploadData(options.GetURI(), "POST", Encoding.Default.GetBytes(FinalPost));
                         }
                         catch (Exception e)
                         {

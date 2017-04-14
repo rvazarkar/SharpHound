@@ -103,7 +103,7 @@
     <Compile Include="DatabaseObjects\Computer.cs" />
     <Compile Include="DatabaseObjects\DBObject.cs" />
     <Compile Include="DatabaseObjects\DomainDB.cs" />
-    <Compile Include="DatabaseObjects\DomainTrust.cs" />
+    <Compile Include="OutputObjects\DomainTrust.cs" />
     <Compile Include="DatabaseObjects\Group.cs" />
     <Compile Include="Extensions.cs" />
     <Compile Include="DatabaseObjects\User.cs" />
@@ -113,6 +113,7 @@
     <Compile Include="Objects\DCSync.cs" />
     <Compile Include="Objects\MappedPrincipal.cs" />
     <Compile Include="OutputObjects\RESTOutput.cs" />
+    <Compile Include="OutputObjects\RESTOutputACL.cs" />
     <Compile Include="SharpHound.cs" />
     <Compile Include="EnumerationSteps\DomainGroupEnumeration.cs" />
     <Compile Include="Exceptions\APIFailedException.cs" />

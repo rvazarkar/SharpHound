@@ -207,7 +207,7 @@ namespace SharpHound
 
                                 try
                                 {
-                                    client.UploadData("http://localhost:7474/db/data/transaction/commit", "POST", Encoding.Default.GetBytes(ToPost));
+                                    client.UploadData(options.GetURI(), "POST", Encoding.Default.GetBytes(ToPost));
                                 }
                                 catch (Exception e)
                                 {
@@ -225,7 +225,7 @@ namespace SharpHound
 
                         try
                         {
-                            client.UploadData("http://localhost:7474/db/data/transaction/commit", "POST", Encoding.Default.GetBytes(FinalPost));
+                            client.UploadData(options.GetURI(), "POST", Encoding.Default.GetBytes(FinalPost));
                         }
                         catch (Exception e)
                         {

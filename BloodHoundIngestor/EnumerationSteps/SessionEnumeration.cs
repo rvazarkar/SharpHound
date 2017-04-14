@@ -11,6 +11,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Runtime.InteropServices;
+using System.Security.Principal;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -41,7 +42,7 @@ namespace SharpHound
             options = helpers.Options;
             manager = DBManager.Instance;
             sidmap = new ConcurrentDictionary<string, DBObject>();
-            CurrentUser = Environment.UserName;
+            CurrentUser = WindowsIdentity.GetCurrent().Name.Split('\\')[1];
             ResolveCache = new ConcurrentDictionary<string, string>();
             GCPath = $"GC://{new DirectoryEntry("LDAP://RootDSE").Properties["dnshostname"].Value.ToString()}";
         }

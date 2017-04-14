@@ -25,7 +25,7 @@ namespace SharpHound.EnumerationSteps
         static int total;
         static int count;
         static string CurrentDomain;
-        static Regex GenericRegex = new Regex("GenericAll|GenericWrite|WriteOwner|WriteDacl");
+        static readonly Regex GenericRegex = new Regex("GenericAll|GenericWrite|WriteOwner|WriteDacl");
 
         static ConcurrentDictionary<string, DCSync> syncers;
 
@@ -278,6 +278,8 @@ namespace SharpHound.EnumerationSteps
                             }
 
                             syncers.AddOrUpdate(principal.DistinguishedName, SyncObject, (key, oldVar) => SyncObject);
+                            //We only care about these privs if we have both, so store that stuff and continue on
+                            continue;
                         }
 
                         output.Add(new ACLInfo

@@ -4,6 +4,7 @@ using System;
 using System.Diagnostics;
 using System.DirectoryServices.ActiveDirectory;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Security.Permissions;
 using static SharpHound.Options;
 
@@ -177,6 +178,12 @@ General Options
             }
         }
 
+        public string GetEncodedUserPass()
+        {
+            var plainTextBytes = System.Text.Encoding.UTF8.GetBytes(UserPass);
+            return Convert.ToBase64String(plainTextBytes);
+        }
+
         public string GetFilePath(string filename)
         {
             string f;
@@ -206,7 +213,8 @@ General Options
             if (Parser.Default.ParseArguments(args, options))
             {
                 Helpers.CreateInstance(options);
-                
+                SetConsoleCtrlHandler(new HandlerRoutine(ConsoleCtrlCheck), true);
+
                 Domain d = Helpers.Instance.GetDomain(options.Domain);
                 if (d == null)
                 {
@@ -299,6 +307,27 @@ General Options
                 Console.WriteLine("Exception logging exception");
                 Console.WriteLine(args.ToString());
             }
+        }
+
+        [DllImport("Kernel32")]
+        public static extern bool SetConsoleCtrlHandler(HandlerRoutine Handler, bool Add);
+
+        public delegate bool HandlerRoutine(CtrlTypes CtrlType);
+
+        public enum CtrlTypes
+        {
+            CTRL_C_EVENT = 0,
+            CTRL_BREAK_EVENT,
+            CTRL_CLOSE_EVENT,
+            CTRL_LOGOFF_EVENT = 5,
+            CTRL_SHUTDOWN_EVENT
+        }
+
+        private static bool ConsoleCtrlCheck(CtrlTypes ctrlType)
+        {
+            //Dispose our database instance when we exit, even if its from ctrl+c
+            DBManager.Instance.Dispose();
+            return true;
         }
     }
 }

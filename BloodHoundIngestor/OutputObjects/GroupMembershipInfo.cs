@@ -15,5 +15,14 @@ namespace SharpHound.OutputObjects
         {
             return String.Format("{0},{1},{2}", GroupName.ToUpper(), AccountName.ToUpper(), ObjectType.ToLower());
         }
+
+        internal object ToParam()
+        {
+            return new
+            {
+                account = AccountName.ToUpper(),
+                group = GroupName.ToUpper()
+            };
+        }
     }
 }

@@ -90,6 +90,7 @@
       <HintPath>..\packages\TaskParallelLibrary.1.0.2856.0\lib\Net35\System.Threading.dll</HintPath>
       <Private>True</Private>
     </Reference>
+    <Reference Include="System.Web.Extensions" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
     <Reference Include="System.Data" />
@@ -111,6 +112,7 @@
     <Compile Include="OutputObjects\ACLInfo.cs" />
     <Compile Include="Objects\DCSync.cs" />
     <Compile Include="Objects\MappedPrincipal.cs" />
+    <Compile Include="OutputObjects\RESTOutput.cs" />
     <Compile Include="SharpHound.cs" />
     <Compile Include="EnumerationSteps\DomainGroupEnumeration.cs" />
     <Compile Include="Exceptions\APIFailedException.cs" />

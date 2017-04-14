@@ -283,7 +283,7 @@ namespace SharpHound.EnumerationSteps
 
                         DomainTrust temptrust = new DomainTrust()
                         {
-                            DomainName = t.DnsDomainName
+                            TargetDomain = t.DnsDomainName
                         };
                         bool inbound = false;
                         bool outbound = false;

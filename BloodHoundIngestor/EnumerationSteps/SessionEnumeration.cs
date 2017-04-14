@@ -9,10 +9,13 @@ using System.Diagnostics;
 using System.DirectoryServices;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Web.Script.Serialization;
 
 namespace SharpHound
 {
@@ -170,6 +173,63 @@ namespace SharpHound
                         foreach (SessionInfo info in output.GetConsumingEnumerable())
                         {
                             writer.WriteLine(info.ToCSV());
+                        }
+                    }
+                }
+                else
+                {
+                    using (WebClient client = new WebClient())
+                    {
+                        client.Headers.Add("content-type", "application/json");
+                        client.Headers.Add("Accept", "application/json; charset=UTF-8");
+                        client.Headers.Add("Authorization", options.GetEncodedUserPass());
+
+                        int localcount = 0;
+
+                        RESTOutput users = new RESTOutput(Query.Sessions);
+
+                        JavaScriptSerializer serializer = new JavaScriptSerializer();
+
+                        foreach (SessionInfo info in output.GetConsumingEnumerable())
+                        {
+                            users.props.Add(info.ToParam());
+                            localcount++;
+                            if (localcount % 1000 == 0)
+                            {
+                                var ToPost = serializer.Serialize(new
+                                {
+                                    statements = new object[]{
+                                        users.GetStatement()
+                                    }
+                                });
+
+                                users.Reset();
+
+                                try
+                                {
+                                    client.UploadData("http://localhost:7474/db/data/transaction/commit", "POST", Encoding.Default.GetBytes(ToPost));
+                                }
+                                catch (Exception e)
+                                {
+                                    Console.WriteLine(e);
+                                }
+                            }
+                        }
+
+                        var FinalPost = serializer.Serialize(new
+                        {
+                            statements = new object[]{
+                                users.GetStatement()
+                            }
+                        });
+
+                        try
+                        {
+                            client.UploadData("http://localhost:7474/db/data/transaction/commit", "POST", Encoding.Default.GetBytes(FinalPost));
+                        }
+                        catch (Exception e)
+                        {
+                            Console.WriteLine(e);
                         }
                     }
                 }

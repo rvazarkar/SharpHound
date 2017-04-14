@@ -9,11 +9,14 @@ using System.Diagnostics;
 using System.DirectoryServices;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Web.Script.Serialization;
 
 namespace SharpHound.EnumerationSteps
 {
@@ -131,6 +134,81 @@ namespace SharpHound.EnumerationSteps
                         foreach (LocalAdminInfo info in output.GetConsumingEnumerable())
                         {
                             writer.WriteLine(info.ToCSV());
+                        }
+                    }
+                }
+                else
+                {
+                    using (WebClient client  = new WebClient())
+                    {
+                        client.Headers.Add("content-type", "application/json");
+                        client.Headers.Add("Accept", "application/json; charset=UTF-8");
+                        client.Headers.Add("Authorization", options.GetEncodedUserPass());
+
+                        int localcount = 0;
+
+                        RESTOutput groups = new RESTOutput(Query.LocalAdminGroup);
+                        RESTOutput computers = new RESTOutput(Query.LocalAdminComputer);
+                        RESTOutput users = new RESTOutput(Query.LocalAdminUser);
+
+                        JavaScriptSerializer serializer = new JavaScriptSerializer();
+
+                        foreach (LocalAdminInfo info in output.GetConsumingEnumerable())
+                        {
+                            switch (info.ObjectType)
+                            {
+                                case "user":
+                                    users.props.Add(info.ToParam());
+                                    break;
+                                case "group":
+                                    groups.props.Add(info.ToParam());
+                                    break;
+                                case "computer":
+                                    computers.props.Add(info.ToParam());
+                                    break;
+                            }
+                            localcount++;
+                            if (localcount % 1000 == 0)
+                            {
+                                var ToPost = serializer.Serialize(new
+                                {
+                                    statements = new object[]{
+                                        users.GetStatement(),
+                                        computers.GetStatement(),
+                                        groups.GetStatement()
+                                    }
+                                });
+
+                                users.Reset();
+                                computers.Reset();
+                                groups.Reset();
+
+                                try
+                                {
+                                    client.UploadData("http://localhost:7474/db/data/transaction/commit", "POST", Encoding.Default.GetBytes(ToPost));
+                                }catch (Exception e)
+                                {
+                                    Console.WriteLine(e);
+                                }
+                            }
+                        }
+
+                        var FinalPost = serializer.Serialize(new
+                        {
+                            statements = new object[]{
+                                users.GetStatement(),
+                                computers.GetStatement(),
+                                groups.GetStatement()
+                            }
+                        });
+
+                        try
+                        {
+                            client.UploadData("http://localhost:7474/db/data/transaction/commit", "POST", Encoding.Default.GetBytes(FinalPost));
+                        }
+                        catch (Exception e)
+                        {
+                            Console.WriteLine(e);
                         }
                     }
                 }
@@ -312,9 +390,9 @@ namespace SharpHound.EnumerationSteps
                                             {
                                                 output.Add(new LocalAdminInfo
                                                 {
-                                                    objectname = obj.BloodHoundDisplayName,
-                                                    objecttype = obj.Type,
-                                                    server = resultdb.BloodHoundDisplayName
+                                                    ObjectName = obj.BloodHoundDisplayName,
+                                                    ObjectType = obj.Type,
+                                                    Server = resultdb.BloodHoundDisplayName
                                                 });
                                             }
                                         }
@@ -353,9 +431,9 @@ namespace SharpHound.EnumerationSteps
                         {
                             users.Add(new LocalAdminInfo
                             {
-                                objectname = obj.BloodHoundDisplayName,
-                                objecttype = obj.Type,
-                                server = Target
+                                ObjectName = obj.BloodHoundDisplayName,
+                                ObjectType = obj.Type,
+                                Server = Target
                             });
                         }
                     }
@@ -517,9 +595,9 @@ namespace SharpHound.EnumerationSteps
 
                     users.Add(new LocalAdminInfo
                     {
-                        server = Target,
-                        objectname = obj.BloodHoundDisplayName,
-                        objecttype = obj.Type
+                        Server = Target,
+                        ObjectName = obj.BloodHoundDisplayName,
+                        ObjectType = obj.Type
                     });
                 }
             }

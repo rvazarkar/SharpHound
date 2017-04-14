@@ -1,5 +1,4 @@
 ﻿using ExtensionMethods;
-using LiteDB;
 using SharpHound.DatabaseObjects;
 using SharpHound.OutputObjects;
 using System;
@@ -9,10 +8,13 @@ using System.Diagnostics;
 using System.DirectoryServices;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Reflection;
 using System.Security.Principal;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Web.Script.Serialization;
 
 namespace SharpHound.EnumerationSteps
 {
@@ -23,8 +25,8 @@ namespace SharpHound.EnumerationSteps
         DBManager manager;
 
         static int progress;
-        private static int totalcount;
-        private static string CurrentDomain;
+        static int totalcount;
+        static string CurrentDomain;
 
         public DomainGroupEnumeration()
         {
@@ -54,7 +56,7 @@ namespace SharpHound.EnumerationSteps
                 List<Task> taskhandles = new List<Task>();
 
                 System.Timers.Timer t = new System.Timers.Timer();
-                t.Elapsed += new System.Timers.ElapsedEventHandler(Timer_Tick);
+                t.Elapsed += Timer_Tick;
 
                 t.Interval = options.Interval;
                 t.Enabled = true;
@@ -69,26 +71,26 @@ namespace SharpHound.EnumerationSteps
 
                 var users =
                     manager.GetUsers().Find(
-                        Query.And(
-                            Query.EQ("Domain", DomainName),
-                            Query.Or(
-                                Query.GT("MemberOf.Count", 0),
-                                Query.Not(Query.EQ("PrimaryGroupId", null)))));
+                        LiteDB.Query.And(
+                            LiteDB.Query.EQ("Domain", DomainName),
+                            LiteDB.Query.Or(
+                                LiteDB.Query.GT("MemberOf.Count", 0),
+                                LiteDB.Query.Not(LiteDB.Query.EQ("PrimaryGroupId", null)))));
 
                 var groups =
                     manager.GetGroups().Find(
-                        Query.And(
-                            Query.EQ("Domain", DomainName),
-                            Query.Or(
-                                Query.GT("MemberOf.Count", 0),
-                                Query.Not(Query.EQ("PrimaryGroupId", null)))));
+                        LiteDB.Query.And(
+                            LiteDB.Query.EQ("Domain", DomainName),
+                            LiteDB.Query.Or(
+                                LiteDB.Query.GT("MemberOf.Count", 0),
+                                LiteDB.Query.Not(LiteDB.Query.EQ("PrimaryGroupId", null)))));
                 var computers =
                     manager.GetComputers().Find(
-                        Query.And(
-                            Query.EQ("Domain", DomainName),
-                            Query.Or(
-                                Query.GT("MemberOf.Count", 0),
-                                Query.Not(Query.EQ("PrimaryGroupId", null)))));
+                        LiteDB.Query.And(
+                            LiteDB.Query.EQ("Domain", DomainName),
+                            LiteDB.Query.Or(
+                                LiteDB.Query.GT("MemberOf.Count", 0),
+                                LiteDB.Query.Not(LiteDB.Query.EQ("PrimaryGroupId", null)))));
 
                 totalcount = users.Count() + groups.Count() + computers.Count();
 
@@ -126,7 +128,7 @@ namespace SharpHound.EnumerationSteps
             overwatch.Stop();
         }
 
-        private void Timer_Tick(object sender, System.Timers.ElapsedEventArgs args)
+        void Timer_Tick(object sender, System.Timers.ElapsedEventArgs args)
         {
             PrintStatus();
         }
@@ -308,6 +310,81 @@ namespace SharpHound.EnumerationSteps
                         foreach (GroupMembershipInfo info in output.GetConsumingEnumerable())
                         {
                             writer.WriteLine(info.ToCSV());
+                        }
+                    }
+                }else
+                {
+                    using (WebClient client = new WebClient())
+                    {
+                        client.Headers.Add("content-type", "application/json");
+                        client.Headers.Add("Accept", "application/json; charset=UTF-8");
+                        client.Headers.Add("Authorization", options.GetEncodedUserPass());
+
+                        int localcount = 0;
+
+                        RESTOutput groups = new RESTOutput(Query.GroupMembershipGroup);
+                        RESTOutput computers = new RESTOutput(Query.GroupMembershipComputer);
+                        RESTOutput users = new RESTOutput(Query.GroupMembershipUser);
+
+                        JavaScriptSerializer serializer = new JavaScriptSerializer();
+
+                        foreach (GroupMembershipInfo info in output.GetConsumingEnumerable())
+                        {
+                            switch (info.ObjectType)
+                            {
+                                case "user":
+                                    users.props.Add(info.ToParam());
+                                    break;
+                                case "group":
+                                    groups.props.Add(info.ToParam());
+                                    break;
+                                case "computer":
+                                    computers.props.Add(info.ToParam());
+                                    break;
+                            }
+                            localcount++;
+                            if (localcount % 1000 == 0)
+                            {
+                                var ToPost = serializer.Serialize(new
+                                {
+                                    statements = new object[]{
+                                        users.GetStatement(),
+                                        computers.GetStatement(),
+                                        groups.GetStatement()
+                                    }
+                                });
+
+                                users.Reset();
+                                computers.Reset();
+                                groups.Reset();
+
+                                try
+                                {
+                                    client.UploadData("http://localhost:7474/db/data/transaction/commit", "POST", Encoding.Default.GetBytes(ToPost));
+                                }
+                                catch (Exception e)
+                                {
+                                    Console.WriteLine(e);
+                                }
+                            }
+                        }
+
+                        var FinalPost = serializer.Serialize(new
+                        {
+                            statements = new object[]{
+                                users.GetStatement(),
+                                computers.GetStatement(),
+                                groups.GetStatement()
+                            }
+                        });
+
+                        try
+                        {
+                            client.UploadData("http://localhost:7474/db/data/transaction/commit", "POST", Encoding.Default.GetBytes(FinalPost));
+                        }
+                        catch (Exception e)
+                        {
+                            Console.WriteLine(e);
                         }
                     }
                 }

@@ -11,9 +11,19 @@ namespace SharpHound.OutputObjects
         public string ComputerName { get; set; }
         public int Weight { get; set; }
 
-        public string ToCSV()
+        internal string ToCSV()
         {
             return String.Format("{0},{1},{2}", UserName.ToUpper(), ComputerName.ToUpper(), Weight);
+        }
+
+        internal object ToParam()
+        {
+            return new
+            {
+                account = UserName.ToUpper(),
+                computer = ComputerName.ToUpper(),
+                weight = Weight
+            };
         }
     }
 }

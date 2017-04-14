@@ -20,5 +20,15 @@ namespace SharpHound.OutputObjects
         {
             return $"{ObjectName},{ObjectType},{PrincipalName},{PrincipalType},{RightName},{AceType},{Qualifier},{Inherited}";
         }
+
+        internal object ToParam()
+        {
+            return new
+            {
+                account = ObjectName,
+                principal = PrincipalName,
+
+            };
+        }
     }
 }

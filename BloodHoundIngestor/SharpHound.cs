@@ -4,6 +4,7 @@ using System;
 using System.Diagnostics;
 using System.DirectoryServices.ActiveDirectory;
 using System.IO;
+using System.Net;
 using System.Runtime.InteropServices;
 using System.Security.Permissions;
 using static SharpHound.Options;
@@ -177,9 +178,15 @@ General Options
             var plainTextBytes = System.Text.Encoding.UTF8.GetBytes(UserPass);
             return Convert.ToBase64String(plainTextBytes);
         }
+
         public string GetURI()
         {
             return $"http://{URI}/db/data/transaction/commit";
+        }
+
+        public string GetCheckURI()
+        {
+            return $"http://{URI}/db/data/";
         }
 
         public string GetFilePath(string filename)
@@ -207,11 +214,10 @@ General Options
             var options = new Options();
 
             AppDomain currentDomain = AppDomain.CurrentDomain;
-            currentDomain.UnhandledException += new UnhandledExceptionEventHandler(MyHandler);
+            currentDomain.UnhandledException += new UnhandledExceptionEventHandler(UnhandledExceptionHandler);
             if (Parser.Default.ParseArguments(args, options))
             {
                 Helpers.CreateInstance(options);
-                SetConsoleCtrlHandler(new HandlerRoutine(ConsoleCtrlCheck), true);
 
                 Domain d = Helpers.Instance.GetDomain(options.Domain);
                 if (d == null)
@@ -229,6 +235,30 @@ General Options
 
                 SidCacheBuilder builder = new SidCacheBuilder();
                 builder.StartEnumeration();
+
+                if (options.URI != null)
+                {
+                    using (WebClient client = new WebClient())
+                    {
+                        client.Headers.Add("content-type", "application/json");
+                        client.Headers.Add("Accept", "application/json; charset=UTF-8");
+                        if (options.UserPass != null)
+                        {
+                            client.Headers.Add("Authorization", options.GetEncodedUserPass());
+                        }
+                        
+                        try
+                        {
+                            client.DownloadData(options.GetCheckURI());
+                            Console.WriteLine("Successfully connected to Neo4j REST endpoint.");
+                        }
+                        catch
+                        {
+                            Console.WriteLine("Unable to connect to the Neo4j REST endpoint. Check your URI and username/password.");
+                            return;
+                        }
+                    }
+                }
 
                 switch (options.CollMethod)
                 {
@@ -293,7 +323,7 @@ General Options
             Main(args);
         }
 
-        static void MyHandler(object sender, UnhandledExceptionEventArgs args)
+        static void UnhandledExceptionHandler(object sender, UnhandledExceptionEventArgs args)
         {
             try
             {
@@ -303,29 +333,9 @@ General Options
             catch
             {
                 Console.WriteLine("Exception logging exception");
-                Console.WriteLine(args.ToString());
+                Console.WriteLine(args);
             }
         }
 
-        [DllImport("Kernel32")]
-        public static extern bool SetConsoleCtrlHandler(HandlerRoutine Handler, bool Add);
-
-        public delegate bool HandlerRoutine(CtrlTypes CtrlType);
-
-        public enum CtrlTypes
-        {
-            CTRL_C_EVENT = 0,
-            CTRL_BREAK_EVENT,
-            CTRL_CLOSE_EVENT,
-            CTRL_LOGOFF_EVENT = 5,
-            CTRL_SHUTDOWN_EVENT
-        }
-
-        private static bool ConsoleCtrlCheck(CtrlTypes ctrlType)
-        {
-            //Dispose our database instance when we exit, even if its from ctrl+c
-            DBManager.Instance.Dispose();
-            return true;
-        }
     }
 }

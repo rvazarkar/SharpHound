@@ -7,8 +7,7 @@ namespace SharpHound.OutputObjects
 {
     class RESTOutputACL
     {
-
-        public new object GetStatement()
+        public object GetStatement()
         {
             return null;
         }

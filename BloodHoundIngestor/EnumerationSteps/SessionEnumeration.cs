@@ -458,7 +458,7 @@ namespace SharpHound
 
                 if (!ResolveCache.TryGetValue(cname, out string DNSHostName))
                 {
-                    DNSHostName = System.Net.Dns.GetHostEntry(cname).HostName;
+                    DNSHostName = Dns.GetHostEntry(cname).HostName;
                     ResolveCache.TryAdd(cname, DNSHostName);
                 }
 

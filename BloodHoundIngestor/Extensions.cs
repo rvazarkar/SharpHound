@@ -15,10 +15,8 @@ namespace ExtensionMethods
             if (result.Properties[prop].Count == 0)
             {
                 return null;
-            }else
-            {
-                return result.Properties[prop][0].ToString();
             }
+            return result.Properties[prop][0].ToString();
         }
         
         public static string ToTitleCase(this string str)
@@ -28,20 +26,18 @@ namespace ExtensionMethods
         
         public static List<string> GetPropArray(this SearchResult result, string prop)
         {
+            List<string> l = new List<string>();
             if (result.Properties[prop].Count == 0)
             {
-                return new List<string>();
-            }
-            else
-            {
-                List<string> l = new List<string>();
-                foreach (var x in result.Properties[prop])
-                {
-                    l.Add(x.ToString());
-                }
-
                 return l;
             }
+            
+            foreach (var x in result.Properties[prop])
+            {
+                l.Add(x.ToString());
+            }
+
+            return l;
         }
 
         public static byte[] GetPropBytes(this SearchResult result, string prop)
@@ -50,10 +46,7 @@ namespace ExtensionMethods
             {
                 return null;
             }
-            else
-            {
-                return (byte[])result.Properties[prop][0];
-            }
+            return (byte[])result.Properties[prop][0];
         }
 
         public static void PrintSearchResult(this SearchResult result)

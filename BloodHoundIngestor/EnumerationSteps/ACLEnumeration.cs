@@ -244,7 +244,51 @@ namespace SharpHound.EnumerationSteps
             {
                 foreach (DBObject obj in input.GetConsumingEnumerable())
                 {
-                    RawAcl acls = new RawSecurityDescriptor(obj.NTSecurityDescriptor, 0).DiscretionaryAcl;
+                    RawSecurityDescriptor desc = new RawSecurityDescriptor(obj.NTSecurityDescriptor, 0);
+                    RawAcl acls = desc.DiscretionaryAcl;
+                    string ownersid = desc.Owner.ToString();
+                    
+                    if (!manager.FindBySID(ownersid, CurrentDomain, out DBObject owner))
+                    {
+                        if (MappedPrincipal.GetCommon(ownersid, out MappedPrincipal mapped))
+                        {
+                            owner = new DBObject
+                            {
+                                BloodHoundDisplayName = $"{mapped.SimpleName}@{CurrentDomain}",
+                                Type = "group",
+                                Domain = CurrentDomain,
+                            };
+                        }
+                        else
+                        {
+                            try
+                            {
+                                DirectoryEntry entry = new DirectoryEntry($"LDAP://<SID={ownersid}>");
+                                owner = entry.ConvertToDB();
+                                manager.InsertRecord(owner);
+                            }
+                            catch
+                            {
+                                owner = null;
+                                options.WriteVerbose($"Unable to resolve {ownersid} for object owner");
+                            }
+                        }
+                    }
+
+                    if (owner != null)
+                    {
+                        output.Add(new ACLInfo
+                        {
+                            ObjectName = obj.BloodHoundDisplayName,
+                            ObjectType = obj.Type,
+                            Inherited = false,
+                            RightName = "Owner",
+                            PrincipalName = owner.BloodHoundDisplayName,
+                            PrincipalType = owner.Type,
+                            AceType = "",
+                            Qualifier = "AccessAllowed"
+                        });
+                    }
 
                     foreach (QualifiedAce r in acls)
                     {

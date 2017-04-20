@@ -72,7 +72,7 @@ namespace SharpHound.EnumerationSteps
                 count = 0;
 
                 System.Timers.Timer t = new System.Timers.Timer();
-                t.Elapsed += new System.Timers.ElapsedEventHandler(Timer_Tick);
+                t.Elapsed += Timer_Tick;
 
                 t.Interval = options.Interval;
                 t.Enabled = true;
@@ -88,7 +88,7 @@ namespace SharpHound.EnumerationSteps
 
                 searcher.Filter = "(|(samAccountType=805306368)(samAccountType=805306369)(samAccountType=268435456)(samAccountType=268435457)(samAccountType=536870912)(samAccountType=536870913)(objectclass=domain))";
                 searcher.PropertiesToLoad.AddRange(props);
-                searcher.SecurityMasks = SecurityMasks.Dacl;
+                searcher.SecurityMasks = SecurityMasks.Dacl | SecurityMasks.Owner;
 
                 foreach (SearchResult r in searcher.FindAll())
                 {

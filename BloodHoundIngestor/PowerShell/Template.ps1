@@ -58,7 +58,10 @@ function Invoke-BloodHound{
 
 		[ValidateRange(500,60000)]
 		[int]
-		$Interval
+		$Interval,
+
+		[Switch]
+		$Verbose
     )
 
 	$vars = New-Object System.Collections.Generic.List[System.Object]

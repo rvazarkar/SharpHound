@@ -25,10 +25,38 @@ namespace SharpHound.OutputObjects
         {
             return new
             {
-                account = ObjectName,
-                principal = PrincipalName,
-
+                account = ObjectName.ToUpper(),
+                principal = PrincipalName.ToUpper(),
             };
+        }
+
+        internal string GetKey()
+        {
+            string reltype;
+            switch (AceType)
+            {
+                case "All":
+                    reltype = "AllExtendedRights";
+                    break;
+                case "User-Force-Change-Password":
+                    reltype = "ForceChangePassword";
+                    break;
+                case "ExtendedRight":
+                    reltype = AceType;
+                    break;
+                default:
+                    reltype = RightName;
+                    break;
+            }
+
+            reltype = reltype.Replace("-", "");
+
+            if (reltype.Contains("WriteOwner"))
+            {
+                reltype = "WriteOwner";
+            }
+
+            return $"{ObjectType}|{reltype}|{PrincipalType}";
         }
     }
 }

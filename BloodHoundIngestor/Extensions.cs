@@ -20,7 +20,12 @@ namespace ExtensionMethods
                 return result.Properties[prop][0].ToString();
             }
         }
-
+        
+        public static string ToTitleCase(this string str)
+        {
+            return str.Substring(0, 1).ToUpper() + str.Substring(1).ToLower();
+        }
+        
         public static List<string> GetPropArray(this SearchResult result, string prop)
         {
             if (result.Properties[prop].Count == 0)

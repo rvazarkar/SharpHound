@@ -9,10 +9,13 @@ using System.Diagnostics;
 using System.DirectoryServices;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Security.AccessControl;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Web.Script.Serialization;
 
 namespace SharpHound.EnumerationSteps
 {
@@ -155,6 +158,80 @@ namespace SharpHound.EnumerationSteps
                         foreach (ACLInfo info in output.GetConsumingEnumerable())
                         {
                             writer.WriteLine(info.ToCSV());
+                        }
+                    }
+                }
+                else
+                {
+                    using (WebClient client = new WebClient())
+                    {
+                        client.Headers.Add("content-type", "application/json");
+                        client.Headers.Add("Accept", "application/json; charset=UTF-8");
+                        client.Headers.Add("Authorization", options.GetEncodedUserPass());
+
+                        int localcount = 0;
+                        Dictionary<string, RESTOutputACL> restmap = new Dictionary<string, RESTOutputACL>();
+
+                        JavaScriptSerializer serializer = new JavaScriptSerializer();
+                        List<object> statements = new List<object>();
+
+                        foreach (ACLInfo info in output.GetConsumingEnumerable())
+                        {
+                            localcount++;
+                            string key = info.GetKey();
+                            if (!restmap.TryGetValue(key, out RESTOutputACL val))
+                            {
+                                val = new RESTOutputACL();
+                            }
+
+                            val.props.Add(info.ToParam());
+
+                            restmap[key] = val;
+
+                            if (localcount % 1000 == 0)
+                            {
+                                statements = new List<object>();
+                                foreach (string k in restmap.Keys)
+                                {
+                                    statements.Add(restmap[k].GetStatement(k));
+                                }
+
+                                var ToPost = serializer.Serialize(new
+                                {
+                                    statements = statements.ToArray()
+                                });
+
+                                try
+                                {
+                                    client.UploadData(options.GetURI(), "POST", Encoding.Default.GetBytes(ToPost));
+                                }
+                                catch (Exception e)
+                                {
+                                    Console.WriteLine(e);
+                                }
+
+                                restmap = new Dictionary<string, RESTOutputACL>();
+                            }
+                        }
+
+                        statements = new List<object>();
+                        foreach (string k in restmap.Keys)
+                        {
+                            statements.Add(restmap[k].GetStatement(k));
+                        }
+
+                        var FinalPost = serializer.Serialize(new
+                        {
+                            statements = statements.ToArray()
+                        });
+
+                        try
+                        {
+                            client.UploadData(options.GetURI(), "POST", Encoding.Default.GetBytes(FinalPost));
+                        }
+                        catch (Exception e)
+                        {
+                            Console.WriteLine(e);
                         }
                     }
                 }

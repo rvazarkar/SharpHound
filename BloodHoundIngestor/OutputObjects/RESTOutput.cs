@@ -29,7 +29,7 @@ namespace SharpHound.OutputObjects
     {
         public List<object> props;
         JavaScriptSerializer serializer;
-        private Query query;
+        Query query;
 
 
         internal RESTOutput(Query type)

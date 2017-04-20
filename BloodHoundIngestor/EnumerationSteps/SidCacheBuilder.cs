@@ -163,9 +163,9 @@ namespace SharpHound.EnumerationSteps
                     {
                         domainacl.Upsert(obj as DomainACL);
                     }
-                    SidCacheBuilder.count++;
+                    count++;
 
-                    if (SidCacheBuilder.count % 1000 == 0)
+                    if (count % 1000 == 0)
                     {
                         transaction.Commit();
                         transaction = db.BeginTrans();
@@ -183,7 +183,11 @@ namespace SharpHound.EnumerationSteps
             {
                 foreach (SearchResult r in input.GetConsumingEnumerable())
                 {
-                    output.Add(r.ConvertToDB());
+                    DBObject outp = r.ConvertToDB();
+                    if (outp != null)
+                    {
+                        output.Add(outp);
+                    }
                 }
             });
         }
@@ -209,6 +213,8 @@ namespace SharpHound.EnumerationSteps
             string netbiosname = info.DomainName;
             NetApiBufferFree(pDCI);
 
+            options.WriteVerbose("Grabbed initial trusts");
+
             DomainDB temp = new DomainDB()
             {
                 Completed = false,
@@ -223,6 +229,8 @@ namespace SharpHound.EnumerationSteps
                 string d = ToEnum.Dequeue();
                 dbmanager.GetDomain(d, out temp);
                 enumerated.Add(d);
+
+                options.WriteVerbose($"Grabbing trusts for {d}");
 
                 temp.DomainDNSName = d;
                 
@@ -316,7 +324,7 @@ namespace SharpHound.EnumerationSteps
                         temptrust.IsTransitive = !((trust_attrib & TRUST_ATTRIB.NON_TRANSITIVE) == TRUST_ATTRIB.NON_TRANSITIVE);
                         temptrust.SourceDomain = dns;
                         trusts.Add(temptrust);
-                        if (!d.Contains(dns))
+                        if (!enumerated.Contains(dns))
                         {
                             ToEnum.Enqueue(dns);
                         }

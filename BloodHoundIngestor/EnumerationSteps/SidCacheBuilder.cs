@@ -128,7 +128,7 @@ namespace SharpHound.EnumerationSteps
             int p = count;
             int l = last;
             float ps = (float)(count / watch.Elapsed.TotalSeconds);
-            string progress = $"Building cache for domain {CurrentDomain}: {p} completed (+{l}, {ps}/s)";
+            string progress = $"Building cache for domain {CurrentDomain}: {p} completed (+{p-l}, {ps}/s)";
             Console.WriteLine(progress);
             last = count;
         }
@@ -147,6 +147,8 @@ namespace SharpHound.EnumerationSteps
 
                 foreach (DBObject obj in output.GetConsumingEnumerable())
                 {
+                    if (obj == null)
+                        continue;
                     if (obj is User)
                     {
                         users.Upsert(obj as User);
@@ -220,7 +222,8 @@ namespace SharpHound.EnumerationSteps
                 Completed = false,
                 DomainDNSName = current,
                 DomainShortName = netbiosname,
-                DomainSid = Helpers.Instance.GetDomainSid(current)
+                DomainSid = Helpers.Instance.GetDomainSid(current),
+                Trusts = new List<DomainTrust>()
             };
             dbmanager.InsertDomain(temp);
             
@@ -234,15 +237,24 @@ namespace SharpHound.EnumerationSteps
 
                 temp.DomainDNSName = d;
                 
-                DirectorySearcher searcher = helpers.GetDomainSearcher(Domain: d);
+                DirectorySearcher searcher = helpers.GetDomainSearcher(d);
                 if (searcher == null)
                 {
                     continue;
                 }
                 searcher.Filter = "(userAccountControl:1.2.840.113556.1.4.803:=8192)";
-
-                SearchResult dc = searcher.FindOne();
-                string server = dc.GetProp("dnshostname");
+                string server;
+                try
+                {
+                    SearchResult dc = searcher.FindOne();
+                    server = dc.GetProp("dnshostname");
+                }
+                catch
+                {
+                    options.WriteVerbose($"Unable to get Domain Controller for {DomainName}");
+                    continue;
+                }
+                
 
                 searcher.Dispose();
 

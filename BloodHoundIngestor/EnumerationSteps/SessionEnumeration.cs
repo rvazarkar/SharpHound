@@ -103,7 +103,7 @@ namespace SharpHound
                         {
                             try
                             {
-                                hostname = System.Net.Dns.GetHostEntry(key).HostName;
+                                hostname = Dns.GetHostEntry(key).HostName;
                                 ResolveCache.TryAdd(key, hostname);
                             }
                             catch
@@ -129,7 +129,7 @@ namespace SharpHound
                     manager.GetComputers().Find(x => x.Domain.Equals(DomainName));
 
                 System.Timers.Timer t = new System.Timers.Timer();
-                t.Elapsed += new System.Timers.ElapsedEventHandler(Timer_Tick);
+                t.Elapsed += Timer_Tick;
 
                 t.Interval = options.Interval;
                 t.Enabled = true;
@@ -629,10 +629,10 @@ namespace SharpHound
 
         void PrintStatus()
         {
-            int c = SessionEnumeration.total;
-            int p = SessionEnumeration.count;
-            int d = SessionEnumeration.dead;
-            string progress = $"Session Enumeration for {SessionEnumeration.CurrentDomain} - {count}/{total} ({(float)(((dead + count) / total) * 100)}%) completed. ({count} hosts alive)";
+            int c = total;
+            int p = count;
+            int d = dead;
+            string progress = $"Session Enumeration for {CurrentDomain} - {count}/{total} ({(float)(((dead + count) / total) * 100)}%) completed. ({count} hosts alive)";
             Console.WriteLine(progress);
         }
     }

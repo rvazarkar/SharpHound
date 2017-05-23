@@ -31,7 +31,10 @@ namespace SharpHound.EnumerationSteps
             Task writer = CreateWriter(output);
             foreach (DomainDB d in db.GetDomains().FindAll())
             {
-                d.Trusts.ForEach(output.Add);
+                if (d.Trusts != null)
+                {
+                    d.Trusts.ForEach(output.Add);
+                }
             }
 
             output.CompleteAdding();

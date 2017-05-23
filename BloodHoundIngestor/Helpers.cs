@@ -96,8 +96,7 @@ namespace SharpHound
                 PageSize = 1000,
                 SearchScope = SearchScope.Subtree,
                 CacheResults = false,
-                ReferralChasing = ReferralChasingOption.All,
-                ClientTimeout = TimeSpan.FromSeconds(3)
+                ReferralChasing = ReferralChasingOption.All
             };
             return Searcher;
         }

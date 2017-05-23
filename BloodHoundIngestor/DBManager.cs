@@ -45,16 +45,55 @@ namespace SharpHound
         {
             var mem = new MemoryStream();
             db = new LiteDatabase(mem);
+            CreateIndexes();
         }
 
         DBManager(string file)
         {
             db = new LiteDatabase(file);
+            CreateIndexes();
         }
 
         public void Dispose()
         {
             db.Dispose();
+        }
+
+        private void CreateIndexes()
+        {
+            var users = db.GetCollection<User>("users");
+            var groups = db.GetCollection<Group>("groups");
+            var computers = db.GetCollection<Computer>("computers");
+            var domainacl = db.GetCollection<DomainACL>("domainacl");
+
+            users.EnsureIndex("SID");
+            users.EnsureIndex("PrimaryGroupID");
+            users.EnsureIndex("MemberOf");
+            users.EnsureIndex("MemberOf.Count");
+            users.EnsureIndex("DistinguishedName");
+            users.EnsureIndex("Domain");
+
+            computers.EnsureIndex("SID");
+            computers.EnsureIndex("PrimaryGroupID");
+            computers.EnsureIndex("MemberOf");
+            computers.EnsureIndex("MemberOf.Count");
+            computers.EnsureIndex("DistinguishedName");
+            computers.EnsureIndex("Domain");
+            computers.EnsureIndex("DNSHostName");
+
+            groups.EnsureIndex("SID");
+            groups.EnsureIndex("PrimaryGroupID");
+            groups.EnsureIndex("MemberOf");
+            groups.EnsureIndex("MemberOf.Count");
+            groups.EnsureIndex("DistinguishedName");
+            groups.EnsureIndex("Domain");
+
+            domainacl.EnsureIndex("SID");
+            domainacl.EnsureIndex("PrimaryGroupID");
+            domainacl.EnsureIndex("MemberOf");
+            domainacl.EnsureIndex("MemberOf.Count");
+            domainacl.EnsureIndex("DistinguishedName");
+            domainacl.EnsureIndex("Domain");
         }
 
         public void UpdateDBMap()
@@ -228,10 +267,7 @@ namespace SharpHound
             {
                 return false;
             }
-            else
-            {
-                return true;
-            }
+            return true;
         }
 
         public bool GetGCMap(string username, out GlobalCatalogMap obj)
@@ -268,7 +304,10 @@ namespace SharpHound
             var groups = db.GetCollection<Group>("groups");
             var computers = db.GetCollection<Computer>("computers");
             var domainacl = db.GetCollection<DomainACL>("domainacl");
-            
+
+            if (record == null)
+                return;
+
             if (record is User)
             {
                 users.Upsert(record as User);

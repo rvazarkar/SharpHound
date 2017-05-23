@@ -135,13 +135,13 @@ namespace SharpHound.EnumerationSteps
 
         void PrintStatus()
         {
-            int c = DomainGroupEnumeration.totalcount;
+            int c = totalcount;
             if (c == 0)
             {
                 return;
             }
-            int p = DomainGroupEnumeration.progress;
-            string ProgressStr = $"Group Enumeration for {DomainGroupEnumeration.CurrentDomain} - {p}/{c} ({(float)((p / c) * 100)}%) completed.";
+            int p = progress;
+            string ProgressStr = $"Group Enumeration for {CurrentDomain} - {p}/{c} ({(float)((p / c) * 100)}%) completed.";
             Console.WriteLine(ProgressStr);
         }
 
@@ -176,10 +176,10 @@ namespace SharpHound.EnumerationSteps
                             try
                             {
                                 DirectoryEntry entry = new DirectoryEntry($"LDAP://{dn}");
-                                string ObjectSidString = new SecurityIdentifier(entry.Properties["objectSid"].Value as byte[], 0).ToString();
+                                string ObjectSidString = new SecurityIdentifier(entry.GetPropBytes("objectsid"), 0).ToString();
                                 List<string> memberof = entry.GetPropArray("memberOf");
                                 string samaccountname = entry.GetProp("samaccountname");
-                                string DomainName = dn.Substring(dn.IndexOf("DC=", StringComparison.Ordinal)).Replace("DC=", "").Replace(",", ".");
+                                string DomainName = Helpers.DomainFromDN(dn);
                                 string BDisplay = string.Format("{0}@{1}", samaccountname.ToUpper(), DomainName);
 
                                 g = new Group
@@ -286,7 +286,7 @@ namespace SharpHound.EnumerationSteps
                             }
                         }
                     }
-                    Interlocked.Increment(ref DomainGroupEnumeration.progress);
+                    Interlocked.Increment(ref progress);
                 }
             });
         }

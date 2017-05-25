@@ -60,7 +60,7 @@ namespace SharpHound.EnumerationSteps
                 List<Task> taskhandles = new List<Task>();
 
                 System.Timers.Timer t = new System.Timers.Timer();
-                t.Elapsed += new System.Timers.ElapsedEventHandler(Timer_Tick);
+                t.Elapsed += Timer_Tick;
 
                 t.Interval = options.Interval;
                 t.Enabled = true;
@@ -73,32 +73,53 @@ namespace SharpHound.EnumerationSteps
 
                 Console.WriteLine($"Started ACL enumeration for {DomainName}");
 
-                var users = manager.GetUsers().Find(x => x.Domain.Equals(DomainName, StringComparison.InvariantCultureIgnoreCase));
-                var computers = manager.GetComputers().Find(x => x.Domain.Equals(DomainName, StringComparison.InvariantCultureIgnoreCase));
-                var groups = manager.GetGroups().Find(x => x.Domain.Equals(DomainName, StringComparison.InvariantCultureIgnoreCase));
-                var domains = manager.GetDomainACLS().Find(x => x.Domain.Equals(DomainName, StringComparison.InvariantCultureIgnoreCase));
-                count = 0;
-                total = users.Count() + computers.Count() + groups.Count() + domains.Count();
-
-                foreach (DBObject obj in users)
+                if (options.NoDB)
                 {
-                    input.Add(obj);
-                }
+                    DirectorySearcher searcher = helpers.GetDomainSearcher(DomainName);
+                    searcher.PropertiesToLoad.AddRange(new string[] { "distinguishedName", "samaccountname", "dnshostname", "objectclass", "objectsid", "name", "ntsecuritydescriptor" });
+                    searcher.Filter = "(|(samAccountType=805306368)(samAccountType=805306369)(samAccountType=268435456)(samAccountType=268435457)(samAccountType=536870912)(samAccountType=536870913)(objectclass=domain))";
+                    searcher.SecurityMasks = SecurityMasks.Dacl | SecurityMasks.Owner;
+                    count = 0;
+                    total = -1;
 
-                foreach (DBObject obj in computers)
-                {
-                    input.Add(obj);
+                    PrintStatus();
+                    foreach (SearchResult r in searcher.FindAll())
+                    {
+                        input.Add(r.ConvertToDB());
+                    }
+                    searcher.Dispose();
                 }
+                else
+                {
+                    var users = manager.GetUsers().Find(x => x.Domain.Equals(DomainName, StringComparison.InvariantCultureIgnoreCase));
+                    var computers = manager.GetComputers().Find(x => x.Domain.Equals(DomainName, StringComparison.InvariantCultureIgnoreCase));
+                    var groups = manager.GetGroups().Find(x => x.Domain.Equals(DomainName, StringComparison.InvariantCultureIgnoreCase));
+                    var domains = manager.GetDomainACLS().Find(x => x.Domain.Equals(DomainName, StringComparison.InvariantCultureIgnoreCase));
+                    count = 0;
+                    total = users.Count() + computers.Count() + groups.Count() + domains.Count();
 
-                foreach (DBObject obj in groups)
-                {
-                    input.Add(obj);
-                }
+                    PrintStatus();
 
-                foreach (DBObject obj in domains)
-                {
-                    input.Add(obj);
-                }
+                    foreach (DBObject obj in users)
+                    {
+                        input.Add(obj);
+                    }
+
+                    foreach (DBObject obj in computers)
+                    {
+                        input.Add(obj);
+                    }
+
+                    foreach (DBObject obj in groups)
+                    {
+                        input.Add(obj);
+                    }
+
+                    foreach (DBObject obj in domains)
+                    {
+                        input.Add(obj);
+                    }
+                }                
 
                 input.CompleteAdding();
                 options.WriteVerbose("Waiting for enumeration threads to finish...");
@@ -130,13 +151,23 @@ namespace SharpHound.EnumerationSteps
 
         void PrintStatus()
         {
-            int c = ACLEnumeration.total;
+            int c = total;
             if (c == 0)
             {
                 return;
             }
-            int p = ACLEnumeration.count;
-            string ProgressStr = $"ACL Enumeration for {ACLEnumeration.CurrentDomain} - {p}/{c} ({(float)((p / c) * 100)}%) completed.";
+            int p = count;
+
+            string ProgressStr;
+            if (c == -1)
+            {
+                ProgressStr = $"ACL Enumeration for {CurrentDomain} - {p} objects completed.";
+            }
+            else
+            {
+                ProgressStr = $"ACL Enumeration for {CurrentDomain} - {p}/{c} ({(float)((p / c) * 100)}%) completed.";
+            }
+            
             Console.WriteLine(ProgressStr);
         }
 

@@ -70,86 +70,196 @@ namespace SharpHound
                     taskhandles.Add(StartConsumer(input, output, factory));
                 }
 
-                if (options.Stealth)
+                if (options.NoDB)
                 {
-                    Console.WriteLine($"Started stealth session enumeration for {DomainName}");
-                    var users = manager.GetUsers().Find(x => x.HomeDirectory != null || x.ScriptPath != null || x.ProfilePath != null);
-                    ConcurrentBag<string> paths = new ConcurrentBag<string>();
-                    Parallel.ForEach(users, (result) =>
+                    if (options.Stealth)
                     {
-                        string home = result.HomeDirectory;
-                        string script = result.ScriptPath;
-                        string prof = result.ProfilePath;
+                        ConcurrentDictionary<string, byte> paths = new ConcurrentDictionary<string, byte>();
+                        DirectorySearcher searcher = helpers.GetDomainSearcher(DomainName);
+                        searcher.Filter = "(&(samAccountType=805306368)(!(userAccountControl:1.2.840.113556.1.4.803:=2))(|(homedirectory=*)(scriptpath=*)(profilepath=*)))";
+                        searcher.PropertiesToLoad.AddRange(new string[] { "homedirectory", "scriptpath", "profilepath" });
 
-                        if (home != null)
+                        Parallel.ForEach(searcher.FindAll().Cast<SearchResult>().ToArray(), (result) =>
                         {
-                            paths.Add(home.ToLower().Split('\\')[2]);
-                        }
+                            string home = result.GetProp("homedirectory");
+                            string script = result.GetProp("scriptpath");
+                            string profile = result.GetProp("profilepath");
 
-                        if (script != null)
-                        {
-                            paths.Add(script.ToLower().Split('\\')[2]);
-                        }
-
-                        if (prof != null)
-                        {
-                            paths.Add(prof.ToLower().Split('\\')[2]);
-                        }
-                    });
-
-                    foreach (string key in paths)
-                    {
-                        if (!ResolveCache.TryGetValue(key, out string hostname))
-                        {
-                            try
+                            if (home != null)
                             {
-                                hostname = Dns.GetHostEntry(key).HostName;
-                                ResolveCache.TryAdd(key, hostname);
+                                paths.TryAdd(home.ToLower().Split('\\')[2], default(byte));
                             }
-                            catch
+
+                            if (script != null)
+                            {
+                                paths.TryAdd(script.ToLower().Split('\\')[2], default(byte));
+                            }
+
+                            if (profile != null)
+                            {
+                                paths.TryAdd(profile.ToLower().Split('\\')[2], default(byte));
+                            }
+                        });
+
+                        searcher.Dispose();
+
+                        foreach (string key in paths.Keys)
+                        {
+                            if (!ResolveCache.TryGetValue(key, out string hostname))
+                            {
+                                try
+                                {
+                                    hostname = Dns.GetHostEntry(key).HostName;
+                                    ResolveCache.TryAdd(key, hostname);
+                                }
+                                catch
+                                {
+                                    continue;
+                                }
+                            }
+                            if (hostname == null)
                             {
                                 continue;
                             }
+                            searcher = helpers.GetDomainSearcher(DomainName);
+                            searcher.Filter = $"(&(sAMAccountType=805306369)(dnshostname={hostname}))";
+                            searcher.PropertiesToLoad.AddRange(new string[] { "dnshostname", "samaccounttype", "distinguishedname", "primarygroupid", "samaccountname", "objectsid" });
+                            SearchResult r = searcher.FindOne();
+                            if (r != null)
+                            {
+                                input.Add(r.ConvertToDB() as Computer);
+                            }
                         }
-                        if (hostname == null)
+
+                        searcher = helpers.GetDomainSearcher(DomainName);
+                        searcher.Filter = "(userAccountControl:1.2.840.113556.1.4.803:=8192)";
+                        searcher.PropertiesToLoad.AddRange(new string[] { "dnshostname", "samaccounttype", "distinguishedname", "primarygroupid", "samaccountname", "objectsid" });
+
+                        foreach (SearchResult r in searcher.FindAll())
                         {
-                            continue;
+                            input.Add(r.ConvertToDB() as Computer);
                         }
-                        input.Add(manager.GetComputers().FindOne(x => x.DNSHostName.ToUpper().Equals(hostname)));
+
+                        searcher.Dispose();
                     }
+                    else
+                    {
+                        DirectorySearcher searcher = helpers.GetDomainSearcher(DomainName);
+                        searcher.Filter = "(&(sAMAccountType=805306369)(!(UserAccountControl:1.2.840.113556.1.4.803:=2)))";
+                        searcher.PropertiesToLoad.AddRange(new string[]{ "dnshostname", "samaccounttype", "distinguishedname","primarygroupid","samaccountname", "objectsid"});
+
+                        System.Timers.Timer t = new System.Timers.Timer();
+                        t.Elapsed += Timer_Tick;
+
+                        t.Interval = options.Interval;
+                        t.Enabled = true;
+
+                        total = -1;
+                        PrintStatus();
+
+                        foreach (SearchResult r in searcher.FindAll())
+                        {
+                            input.Add(r.ConvertToDB() as Computer);   
+                        }
+
+                        searcher.Dispose();
+
+                        input.CompleteAdding();
+                        options.WriteVerbose("Waiting for enumeration threads to finish...");
+                        Task.WaitAll(taskhandles.ToArray());
+                        output.CompleteAdding();
+                        options.WriteVerbose("Waiting for writer thread to finish...");
+                        writer.Wait();
+                        PrintStatus();
+                        t.Dispose();
+                        Console.WriteLine($"Enumeration for {CurrentDomain} done in {watch.Elapsed}");
+                        watch.Reset();
+                    }
+                }
+                else
+                {
+                    if (options.Stealth)
+                    {
+                        Console.WriteLine($"Started stealth session enumeration for {DomainName}");
+                        var users = manager.GetUsers().Find(x => x.HomeDirectory != null || x.ScriptPath != null || x.ProfilePath != null);
+                        ConcurrentBag<string> paths = new ConcurrentBag<string>();
+                        Parallel.ForEach(users, (result) =>
+                        {
+                            string home = result.HomeDirectory;
+                            string script = result.ScriptPath;
+                            string prof = result.ProfilePath;
+
+                            if (home != null)
+                            {
+                                paths.Add(home.ToLower().Split('\\')[2]);
+                            }
+
+                            if (script != null)
+                            {
+                                paths.Add(script.ToLower().Split('\\')[2]);
+                            }
+
+                            if (prof != null)
+                            {
+                                paths.Add(prof.ToLower().Split('\\')[2]);
+                            }
+                        });
+
+                        foreach (string key in paths)
+                        {
+                            if (!ResolveCache.TryGetValue(key, out string hostname))
+                            {
+                                try
+                                {
+                                    hostname = Dns.GetHostEntry(key).HostName;
+                                    ResolveCache.TryAdd(key, hostname);
+                                }
+                                catch
+                                {
+                                    continue;
+                                }
+                            }
+                            if (hostname == null)
+                            {
+                                continue;
+                            }
+                            input.Add(manager.GetComputers().FindOne(x => x.DNSHostName.ToUpper().Equals(hostname)));
+                        }
+                        input.CompleteAdding();
+                        Task.WaitAll(taskhandles.ToArray());
+                        output.CompleteAdding();
+                        writer.Wait();
+                        continue;
+                    }
+
+                    Console.WriteLine($"Started session enumeration for {DomainName}");
+                    var computers =
+                        manager.GetComputers().Find(x => x.Domain.Equals(DomainName));
+
+                    System.Timers.Timer t = new System.Timers.Timer();
+                    t.Elapsed += Timer_Tick;
+
+                    t.Interval = options.Interval;
+                    t.Enabled = true;
+
+                    total = computers.Count();
+                    PrintStatus();
+                    foreach (Computer c in computers)
+                    {
+                        input.Add(c);
+                    }
+
                     input.CompleteAdding();
+                    options.WriteVerbose("Waiting for enumeration threads to finish...");
                     Task.WaitAll(taskhandles.ToArray());
                     output.CompleteAdding();
+                    options.WriteVerbose("Waiting for writer thread to finish...");
                     writer.Wait();
-                    continue;
+                    PrintStatus();
+                    t.Dispose();
+                    Console.WriteLine($"Enumeration for {CurrentDomain} done in {watch.Elapsed}");
+                    watch.Reset();
                 }
-
-                Console.WriteLine($"Started session enumeration for {DomainName}");
-                var computers =
-                    manager.GetComputers().Find(x => x.Domain.Equals(DomainName));
-
-                System.Timers.Timer t = new System.Timers.Timer();
-                t.Elapsed += Timer_Tick;
-
-                t.Interval = options.Interval;
-                t.Enabled = true;
-
-                total = computers.Count();
-                PrintStatus();
-                foreach (Computer c in computers)
-                {
-                    input.Add(c);
-                }
-                input.CompleteAdding();
-                options.WriteVerbose("Waiting for enumeration threads to finish...");
-                Task.WaitAll(taskhandles.ToArray());
-                output.CompleteAdding();
-                options.WriteVerbose("Waiting for writer thread to finish...");
-                writer.Wait();
-                PrintStatus();
-                t.Dispose();
-                Console.WriteLine($"Enumeration for {CurrentDomain} done in {watch.Elapsed}");
-                watch.Reset();
             }
             Console.WriteLine($"Session Enumeration done in {overwatch.Elapsed}");
             watch.Stop();
@@ -632,7 +742,16 @@ namespace SharpHound
             int c = total;
             int p = count;
             int d = dead;
-            string progress = $"Session Enumeration for {CurrentDomain} - {count}/{total} ({(float)(((dead + count) / total) * 100)}%) completed. ({count} hosts alive)";
+            string progress;
+            if (total == -1)
+            {
+                progress = $"Session Enumeration for {CurrentDomain} - {count} hosts completed.";
+            }
+            else
+            {
+                progress = $"Session Enumeration for {CurrentDomain} - {count}/{total} ({(float)(((dead + count) / total) * 100)}%) completed. ({count} hosts alive)";
+            }
+            
             Console.WriteLine(progress);
         }
     }

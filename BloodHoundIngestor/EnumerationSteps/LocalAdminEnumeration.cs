@@ -58,34 +58,65 @@ namespace SharpHound.EnumerationSteps
                     continue;
                 }
 
-                var computers =
-                    manager.GetComputers().Find(x => x.Domain.Equals(DomainName));
-
-                total = computers.Count();
                 BlockingCollection<Computer> input = new BlockingCollection<Computer>();
                 BlockingCollection<LocalAdminInfo> output = new BlockingCollection<LocalAdminInfo>();
 
                 LimitedConcurrencyLevelTaskScheduler scheduler = new LimitedConcurrencyLevelTaskScheduler(options.Threads);
                 TaskFactory factory = new TaskFactory(scheduler);
 
+                Task writer = StartWriter(output, factory);
                 List<Task> taskhandles = new List<Task>();
 
-                System.Timers.Timer t = new System.Timers.Timer();
-                t.Elapsed += new System.Timers.ElapsedEventHandler(Timer_Tick);
-
-                t.Interval = options.Interval;
-                t.Enabled = true;
-
-                Task writer = StartWriter(output, factory);
                 for (int i = 0; i < options.Threads; i++)
                 {
                     taskhandles.Add(StartConsumer(input, output, factory));
                 }
-                PrintStatus();
-                foreach (Computer c in computers)
+
+                System.Timers.Timer t = new System.Timers.Timer();
+
+                if (options.NoDB)
                 {
-                    input.Add(c);
+                    total = -1;
+
+
+                    DirectorySearcher searcher = helpers.GetDomainSearcher(DomainName);
+                    searcher.Filter = "(&(sAMAccountType=805306369)(!(UserAccountControl:1.2.840.113556.1.4.803:=2)))";
+                    searcher.PropertiesToLoad.AddRange(new string[] { "dnshostname", "samaccounttype", "distinguishedname", "primarygroupid", "samaccountname", "objectsid" });
+
+                    t.Elapsed += Timer_Tick;
+
+                    t.Interval = options.Interval;
+                    t.Enabled = true;
+
+                    PrintStatus();
+
+                    foreach (SearchResult r in searcher.FindAll())
+                    {
+                        input.Add(r.ConvertToDB() as Computer);
+                    }
+
+                    searcher.Dispose();
                 }
+                else
+                {
+                    var computers =
+                    manager.GetComputers().Find(x => x.Domain.Equals(DomainName));
+
+                    total = computers.Count();
+
+                    t.Elapsed += Timer_Tick;
+
+                    t.Interval = options.Interval;
+                    t.Enabled = true;
+
+                    PrintStatus();
+
+                    foreach (Computer c in computers)
+                    {
+                        input.Add(c);
+                    }
+                }
+                
                 input.CompleteAdding();
                 options.WriteVerbose("Waiting for enumeration threads to finish...");
                 Task.WaitAll(taskhandles.ToArray());
@@ -109,10 +140,19 @@ namespace SharpHound.EnumerationSteps
 
         void PrintStatus()
         {
-            int c = LocalAdminEnumeration.total;
-            int p = LocalAdminEnumeration.count;
-            int d = LocalAdminEnumeration.dead;
-            string progress = $"Local Admin Enumeration for {LocalAdminEnumeration.CurrentDomain} - {count}/{total} ({(float)(((dead + count) / total) * 100)}%) completed. ({count} hosts alive)";
+            int c = total;
+            int p = count;
+            int d = dead;
+            string progress;
+
+            if (total == -1)
+            {
+                progress = $"Local Admin Enumeration for {CurrentDomain} - {count} hosts completed.";
+            }
+            else
+            {
+                progress = $"Local Admin Enumeration for {CurrentDomain} - {count}/{total} ({(float)(((dead + count) / total) * 100)}%) completed. ({count} hosts alive)";
+            }
             Console.WriteLine(progress);
         }
 

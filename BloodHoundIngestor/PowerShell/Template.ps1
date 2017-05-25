@@ -54,6 +54,9 @@ function Invoke-BloodHound{
 		$RemoveDB,
 
 		[Switch]
+		$NoDB,
+
+		[Switch]
 		$ForceRebuild,
 
 		[ValidateRange(500,60000)]
@@ -144,6 +147,10 @@ function Invoke-BloodHound{
 	if ($Interval){
 		$vars.Add("-i");
 		$vars.Add($Interval)
+	}
+
+	if ($NoDB){
+		$vars.Add("--NoDB");
 	}
 
 	$passed = [string[]]$vars.ToArray()

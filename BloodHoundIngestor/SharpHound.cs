@@ -80,6 +80,9 @@ namespace SharpHound
         [Option("RemoveDB", DefaultValue = false, MutuallyExclusiveSet = "dbopt")]
         public bool RemoveDB { get; set; }
 
+        [Option("NoDB", DefaultValue = false, MutuallyExclusiveSet = "dbopt")]
+        public bool NoDB { get; set; }
+
         [ParserState]
         public IParserState LastParserState { get; set; }
 

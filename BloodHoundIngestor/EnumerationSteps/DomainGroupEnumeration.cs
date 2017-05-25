@@ -69,7 +69,22 @@ namespace SharpHound.EnumerationSteps
                 progress = 0;
                 totalcount = 0;
 
-                var users =
+                if (options.NoDB)
+                {
+                    totalcount = -1;
+                    DirectorySearcher searcher = Helpers.GetDomainSearcher(DomainName);
+                    searcher.Filter = "(|(memberof=*)(primarygroupid=*))";
+                    String[] props = { "samaccountname", "distinguishedname", "dnshostname", "samaccounttype", "primarygroupid", "memberof", "objectsid", "objectclass", "ntsecuritydescriptor", "serviceprincipalname", "homedirectory", "scriptpath", "profilepath" };
+                    searcher.PropertiesToLoad.AddRange(props);
+
+                    foreach (SearchResult r in searcher.FindAll())
+                    {
+                        input.Add(r.ConvertToDB());
+                    }
+                }
+                else
+                {
+                    var users =
                     manager.GetUsers().Find(
                         LiteDB.Query.And(
                             LiteDB.Query.EQ("Domain", DomainName),
@@ -77,39 +92,40 @@ namespace SharpHound.EnumerationSteps
                                 LiteDB.Query.GT("MemberOf.Count", 0),
                                 LiteDB.Query.Not(LiteDB.Query.EQ("PrimaryGroupID", null)))));
 
-                var groups =
-                    manager.GetGroups().Find(
-                        LiteDB.Query.And(
-                            LiteDB.Query.EQ("Domain", DomainName),
-                            LiteDB.Query.Or(
-                                LiteDB.Query.GT("MemberOf.Count", 0),
-                                LiteDB.Query.Not(LiteDB.Query.EQ("PrimaryGroupID", null)))));
-                var computers =
-                    manager.GetComputers().Find(
-                        LiteDB.Query.And(
-                            LiteDB.Query.EQ("Domain", DomainName),
-                            LiteDB.Query.Or(
-                                LiteDB.Query.GT("MemberOf.Count", 0),
-                                LiteDB.Query.Not(LiteDB.Query.EQ("PrimaryGroupID", null)))));
+                    var groups =
+                        manager.GetGroups().Find(
+                            LiteDB.Query.And(
+                                LiteDB.Query.EQ("Domain", DomainName),
+                                LiteDB.Query.Or(
+                                    LiteDB.Query.GT("MemberOf.Count", 0),
+                                    LiteDB.Query.Not(LiteDB.Query.EQ("PrimaryGroupID", null)))));
+                    var computers =
+                        manager.GetComputers().Find(
+                            LiteDB.Query.And(
+                                LiteDB.Query.EQ("Domain", DomainName),
+                                LiteDB.Query.Or(
+                                    LiteDB.Query.GT("MemberOf.Count", 0),
+                                    LiteDB.Query.Not(LiteDB.Query.EQ("PrimaryGroupID", null)))));
 
-                totalcount = users.Count() + groups.Count() + computers.Count();
+                    totalcount = users.Count() + groups.Count() + computers.Count();
 
-                PrintStatus();
+                    PrintStatus();
 
-                foreach (User u in users)
-                {
-                    input.Add(u);
-                }
+                    foreach (User u in users)
+                    {
+                        input.Add(u);
+                    }
 
-                foreach (Group g in groups)
-                {
-                    input.Add(g);
-                }
+                    foreach (Group g in groups)
+                    {
+                        input.Add(g);
+                    }
 
-                foreach (Computer c in computers)
-                {
-                    input.Add(c);
-                }
+                    foreach (Computer c in computers)
+                    {
+                        input.Add(c);
+                    }
+                }                
 
                 input.CompleteAdding();
                 options.WriteVerbose("Waiting for enumeration threads to finish...");
@@ -140,8 +156,18 @@ namespace SharpHound.EnumerationSteps
             {
                 return;
             }
-            int p = progress;
-            string ProgressStr = $"Group Enumeration for {CurrentDomain} - {p}/{c} ({(float)((p / c) * 100)}%) completed.";
+
+            string ProgressStr;
+            if (c == -1)
+            {
+                int p = progress;
+                ProgressStr = $"Group Enumeration for {CurrentDomain} - {p} items completed.";
+            }
+            else
+            {
+                int p = progress;
+                ProgressStr = $"Group Enumeration for {CurrentDomain} - {p}/{c} ({(float)((p / c) * 100)}%) completed.";
+            }
             Console.WriteLine(ProgressStr);
         }
 
@@ -151,6 +177,10 @@ namespace SharpHound.EnumerationSteps
             {
                 foreach (DBObject obj in input.GetConsumingEnumerable())
                 {
+                    if (obj is DomainACL)
+                    {
+                        continue;
+                    }
                     foreach (string dn in obj.MemberOf)
                     {
                         if (db.FindDistinguishedName(dn, out DBObject g))

@@ -31,6 +31,10 @@ namespace SharpHound.EnumerationSteps
 
         public void StartEnumeration()
         {
+            if (options.NoDB)
+            {
+                return;
+            }
             List<string> Domains = helpers.GetDomainList();
             
             foreach (string DomainName in Domains)

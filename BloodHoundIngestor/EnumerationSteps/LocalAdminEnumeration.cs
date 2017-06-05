@@ -128,7 +128,7 @@ namespace SharpHound.EnumerationSteps
                 Console.WriteLine($"Enumeration for {CurrentDomain} done in {watch.Elapsed}");
                 watch.Reset();
             }
-            Console.WriteLine($"Local Admin Enumeration done in {overwatch.Elapsed}");
+            Console.WriteLine($"Local Admin Enumeration done in {overwatch.Elapsed}\n");
             watch.Stop();
             overwatch.Stop();
         }

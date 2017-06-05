@@ -43,36 +43,18 @@ namespace SharpHound.EnumerationSteps
                     string current = DomainName;
                     queue.Enqueue(current);
 
-                    IntPtr pDCI = IntPtr.Zero;
-                    DOMAIN_CONTROLLER_INFO info;
-                    int dsresult = DsGetDcName(null, current, 0, null, DSGETDCNAME_FLAGS.DS_IS_DNS_NAME | DSGETDCNAME_FLAGS.DS_RETURN_FLAT_NAME, out pDCI);
-                    info = (DOMAIN_CONTROLLER_INFO)Marshal.PtrToStructure(pDCI, typeof(DOMAIN_CONTROLLER_INFO));
-                    string netbiosname = info.DomainName;
-                    NetApiBufferFree(pDCI);
-
-                    DomainDB ddb = new DomainDB()
+                    while (queue.Count > 0)
                     {
-                        Completed = false,
-                        DomainDNSName = current,
-                        DomainShortName = netbiosname,
-                        DomainSid = Helpers.Instance.GetDomainSid(current),
-                        Trusts = new List<DomainTrust>()
-                    };
-                    map.Add(current, ddb);
+                        current = queue.Dequeue();
+                        enumerated.Add(current);
 
-                    while (!(queue.Count == 0))
-                    {
-                        string d = queue.Dequeue();
-                        map.TryGetValue(d, out DomainDB temp);
-                        enumerated.Add(d);
+                        options.WriteVerbose($"Enumerating {current}");
 
-                        temp.DomainDNSName = d;
-                        DirectorySearcher searcher = helpers.GetDomainSearcher(d);
+                        DirectorySearcher searcher = helpers.GetDomainSearcher(current);
                         if (searcher == null)
                         {
                             continue;
                         }
-
                         searcher.Filter = "(userAccountControl:1.2.840.113556.1.4.803:=8192)";
                         string server;
                         try
@@ -86,9 +68,7 @@ namespace SharpHound.EnumerationSteps
                             continue;
                         }
                         searcher.Dispose();
-
-                        List<DomainTrust> trusts = new List<DomainTrust>();
-
+                                                
                         IntPtr ptr = IntPtr.Zero;
                         uint types = 63;
                         Type DDT = typeof(DS_DOMAIN_TRUSTS);
@@ -107,9 +87,12 @@ namespace SharpHound.EnumerationSteps
                             }
                             for (int i = 0; i < domaincount; i++)
                             {
+                                DomainTrust trust = new DomainTrust()
+                                {
+                                    SourceDomain = current
+                                };
+
                                 DS_DOMAIN_TRUSTS t = array[i];
-                                string dns = t.DnsDomainName;
-                                string netbios = t.NetbiosDomainName;
                                 TRUST_TYPE trust_type = (TRUST_TYPE)t.Flags;
                                 TRUST_ATTRIB trust_attrib = (TRUST_ATTRIB)t.TrustAttributes;
 
@@ -118,22 +101,8 @@ namespace SharpHound.EnumerationSteps
                                 {
                                     continue;
                                 }
+                                trust.TargetDomain = t.DnsDomainName;
 
-                                DomainDB tempdomain = new DomainDB()
-                                {
-                                    DomainDNSName = dns,
-                                    DomainShortName = netbios
-                                };
-                                ConvertSidToStringSid(t.DomainSid, out string s);
-                                tempdomain.DomainSid = s;
-                                tempdomain.Completed = false;
-                                tempdomain.Trusts = new List<DomainTrust>();
-                                map[d] = tempdomain;
-
-                                DomainTrust temptrust = new DomainTrust()
-                                {
-                                    TargetDomain = t.DnsDomainName
-                                };
                                 bool inbound = false;
                                 bool outbound = false;
 
@@ -142,39 +111,33 @@ namespace SharpHound.EnumerationSteps
 
                                 if (inbound && outbound)
                                 {
-                                    temptrust.TrustDirection = "Bidirectional";
+                                    trust.TrustDirection = "Bidirectional";
                                 }
                                 else if (inbound)
                                 {
-                                    temptrust.TrustDirection = "Inbound";
+                                    trust.TrustDirection = "Inbound";
                                 }
                                 else
                                 {
-                                    temptrust.TrustDirection = "Outbound";
+                                    trust.TrustDirection = "Outbound";
                                 }
-
 
                                 if ((trust_type & TRUST_TYPE.DS_DOMAIN_IN_FOREST) == TRUST_TYPE.DS_DOMAIN_IN_FOREST)
                                 {
-                                    temptrust.TrustType = "ParentChild";
+                                    trust.TrustType = "ParentChild";
                                 }
                                 else
                                 {
-                                    temptrust.TrustType = "External";
+                                    trust.TrustType = "External";
                                 }
 
-                                temptrust.IsTransitive = !((trust_attrib & TRUST_ATTRIB.NON_TRANSITIVE) == TRUST_ATTRIB.NON_TRANSITIVE);
-                                temptrust.SourceDomain = dns;
-                                trusts.Add(temptrust);
-                                if (!enumerated.Contains(dns))
+                                trust.IsTransitive = !((trust_attrib & TRUST_ATTRIB.NON_TRANSITIVE) == TRUST_ATTRIB.NON_TRANSITIVE);
+                                output.Add(trust);
+                                if (!enumerated.Contains(t.DnsDomainName))
                                 {
-                                    queue.Enqueue(dns);
+                                    queue.Enqueue(t.DnsDomainName);
                                 }
                             }
-
-                            temp.Trusts = trusts;
-                            map[d] = temp;
-                            NetApiBufferFree(ptr);
                         }
                     }
                 }
@@ -188,8 +151,9 @@ namespace SharpHound.EnumerationSteps
                         d.Trusts.ForEach(output.Add);
                     }
                 }
-            }            
+            }
 
+            Console.WriteLine("got here");
             output.CompleteAdding();
             writer.Wait();
 

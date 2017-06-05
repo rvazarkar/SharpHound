@@ -226,7 +226,7 @@ namespace SharpHound.EnumerationSteps
                 Completed = false,
                 DomainDNSName = current,
                 DomainShortName = netbiosname,
-                DomainSid = Helpers.Instance.GetDomainSid(current),
+                DomainSid = helpers.GetDomainSid(current),
                 Trusts = new List<DomainTrust>()
             };
             dbmanager.InsertDomain(temp);

@@ -261,7 +261,7 @@ namespace SharpHound
                     watch.Reset();
                 }
             }
-            Console.WriteLine($"Session Enumeration done in {overwatch.Elapsed}");
+            Console.WriteLine($"Session Enumeration done in {overwatch.Elapsed}\n");
             watch.Stop();
             overwatch.Stop();
         }

@@ -24,8 +24,11 @@ namespace SharpHound
         public static void CreateInstance(Options cli)
         {
             instance = new Helpers(cli);
-            string file = options.InMemory ? null : options.DBName;
-            DBManager.CreateInstance(file);
+            if (!options.NoDB)
+            {
+                string file = options.InMemory ? null : options.DBName;
+                DBManager.CreateInstance(file);
+            }
         }
 
         public static Helpers Instance

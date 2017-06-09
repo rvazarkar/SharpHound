@@ -151,7 +151,7 @@ namespace SharpHound.EnumerationSteps
             }
             else
             {
-                progress = $"Local Admin Enumeration for {CurrentDomain} - {count}/{total} ({(float)(((dead + count) / total) * 100)}%) completed. ({count} hosts alive)";
+                progress = $"Local Admin Enumeration for {CurrentDomain} - {count + dead}/{total} ({((double)(dead + count) / total).ToString("0.00%")}) completed. ({count} hosts alive)";
             }
             Console.WriteLine(progress);
         }

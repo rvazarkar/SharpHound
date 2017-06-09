@@ -156,17 +156,17 @@ namespace SharpHound.EnumerationSteps
             {
                 return;
             }
+            int p = progress;
 
             string ProgressStr;
+            
             if (c == -1)
-            {
-                int p = progress;
+            {   
                 ProgressStr = $"Group Enumeration for {CurrentDomain} - {p} items completed.";
             }
             else
             {
-                int p = progress;
-                ProgressStr = $"Group Enumeration for {CurrentDomain} - {p}/{c} ({(float)((p / c) * 100)}%) completed.";
+                ProgressStr = $"Group Enumeration for {CurrentDomain} - {p}/{c} ({((double)p/c).ToString("0.00%")}) completed.";
             }
             Console.WriteLine(ProgressStr);
         }

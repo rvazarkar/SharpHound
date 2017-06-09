@@ -24,6 +24,7 @@ namespace SharpHound.EnumerationSteps
         Helpers helpers;
         Options options;
         DBManager manager;
+        string[] commonsids;
 
         static int total;
         static int count;
@@ -37,6 +38,7 @@ namespace SharpHound.EnumerationSteps
             helpers = Helpers.Instance;
             options = helpers.Options;
             manager = DBManager.Instance;
+            commonsids = new string[] { "S-1-0", "S-1-0-0", "S-1-1", "S-1-1-0", "S-1-2", "S-1-2-0", "S-1-2-1", "S-1-3", "S-1-3-0", "S-1-3-1", "S-1-3-2", "S-1-3-3", "S-1-3-4", "S-1-4", "S-1-5", "S-1-5-1", "S-1-5-2", "S-1-5-3", "S-1-5-4", "S-1-5-6", "S-1-5-7", "S-1-5-8", "S-1-5-9", "S-1-5-10", "S-1-5-11", "S-1-5-12", "S-1-5-13", "S-1-5-14", "S-1-5-15", "S-1-5-17", "S-1-5-18", "S-1-5-19", "S-1-5-20", "S-1-5-80-0" };
         }
 
         public void StartEnumeration()
@@ -165,7 +167,7 @@ namespace SharpHound.EnumerationSteps
             }
             else
             {
-                ProgressStr = $"ACL Enumeration for {CurrentDomain} - {p}/{c} ({(float)((p / c) * 100)}%) completed.";
+                ProgressStr = $"ACL Enumeration for {CurrentDomain} - {p}/{c} ({((double)p/c).ToString("0.00%")}) completed.";
             }
             
             Console.WriteLine(ProgressStr);
@@ -275,6 +277,12 @@ namespace SharpHound.EnumerationSteps
             {
                 foreach (DBObject obj in input.GetConsumingEnumerable())
                 {
+                    if (obj.NTSecurityDescriptor == null)
+                    {
+                        options.WriteVerbose($"DACL was null on ${obj.SAMAccountName}");
+                        Interlocked.Increment(ref count);
+                        continue;
+                    }
                     RawSecurityDescriptor desc = new RawSecurityDescriptor(obj.NTSecurityDescriptor, 0);
                     RawAcl acls = desc.DiscretionaryAcl;
                     string ownersid = desc.Owner.ToString();
@@ -302,6 +310,8 @@ namespace SharpHound.EnumerationSteps
                             {
                                 owner = null;
                                 options.WriteVerbose($"Unable to resolve {ownersid} for object owner");
+                                Interlocked.Increment(ref count);
+                                continue;
                             }
                         }
                     }
@@ -348,6 +358,7 @@ namespace SharpHound.EnumerationSteps
                                 catch
                                 {
                                     options.WriteVerbose($"Unable to resolve {PrincipalSID} for ACL");
+                                    Interlocked.Increment(ref count);
                                     continue;
                                 }
                             }
@@ -379,7 +390,10 @@ namespace SharpHound.EnumerationSteps
                             cont |= (guid.Equals("00000000-0000-0000-0000-000000000000") || guid.Equals("bf9679c0-0de6-11d0-a285-00aa003049e2") || guid.Equals("bf9679a8-0de6-11d0-a285-00aa003049e2"));
 
                         if (!cont)
+                        {
+                            Interlocked.Increment(ref count);
                             continue;
+                        }
 
                         string acetype = null;
                         MatchCollection coll = GenericRegex.Matches(rs);
@@ -431,6 +445,7 @@ namespace SharpHound.EnumerationSteps
 
                             syncers.AddOrUpdate(principal.DistinguishedName, SyncObject, (key, oldVar) => SyncObject);
                             //We only care about these privs if we have both, so store that stuff and continue on
+                            Interlocked.Increment(ref count);
                             continue;
                         }
 

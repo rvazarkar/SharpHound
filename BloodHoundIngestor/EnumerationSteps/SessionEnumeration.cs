@@ -278,7 +278,7 @@ namespace SharpHound
                     {
                         if (!append)
                         {
-                            writer.WriteLine("UserName, ComputerName, Weight");
+                            writer.WriteLine("UserName,ComputerName,Weight");
                         }
                         writer.AutoFlush = true;
                         foreach (SessionInfo info in output.GetConsumingEnumerable())
@@ -749,7 +749,7 @@ namespace SharpHound
             }
             else
             {
-                progress = $"Session Enumeration for {CurrentDomain} - {count}/{total} ({(float)(((dead + count) / total) * 100)}%) completed. ({count} hosts alive)";
+                progress = $"Session Enumeration for {CurrentDomain} - {dead + count}/{total} ({(((dead + count) / (double)total)).ToString("0.00%")}) completed. ({count} hosts alive)";
             }
             
             Console.WriteLine(progress);

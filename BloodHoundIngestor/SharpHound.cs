@@ -332,6 +332,7 @@ General Options
             {
                 Exception e = (Exception)args.ExceptionObject;
                 Console.WriteLine("MyHandler caught : " + e.Message);
+                Console.WriteLine(e);
             }
             catch
             {

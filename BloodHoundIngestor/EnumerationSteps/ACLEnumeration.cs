@@ -32,6 +32,8 @@ namespace SharpHound.EnumerationSteps
         static readonly Regex GenericRegex = new Regex("GenericAll|GenericWrite|WriteOwner|WriteDacl");
 
         static ConcurrentDictionary<string, DCSync> syncers;
+        static ConcurrentDictionary<string, byte> NullSIDS;
+        static ConcurrentDictionary<string, DBObject> ResolveCache;
 
         public ACLEnumeration()
         {
@@ -56,7 +58,12 @@ namespace SharpHound.EnumerationSteps
                 BlockingCollection<ACLInfo> output = new BlockingCollection<ACLInfo>();
 
                 syncers = new ConcurrentDictionary<string, DCSync>();
-
+                NullSIDS = new ConcurrentDictionary<string, byte>();
+                if (options.NoDB)
+                {
+                    ResolveCache = new ConcurrentDictionary<string, DBObject>();
+                }
+                
                 LimitedConcurrencyLevelTaskScheduler scheduler = new LimitedConcurrencyLevelTaskScheduler(options.Threads);
                 TaskFactory factory = new TaskFactory(scheduler);
                 List<Task> taskhandles = new List<Task>();
@@ -187,10 +194,15 @@ namespace SharpHound.EnumerationSteps
                         {
                             writer.WriteLine("ObjectName,ObjectType,PrincipalName,PrincipalType,ActiveDirectoryRights,ACEType,AccessControlType,IsInherited");
                         }
-                        writer.AutoFlush = true;
+                        int localcount = 0;
                         foreach (ACLInfo info in output.GetConsumingEnumerable())
                         {
                             writer.WriteLine(info.ToCSV());
+                            localcount++;
+                            if (localcount % 100 == 0)
+                            {
+                                writer.Flush();
+                            }
                         }
                     }
                 }
@@ -277,10 +289,10 @@ namespace SharpHound.EnumerationSteps
             {
                 foreach (DBObject obj in input.GetConsumingEnumerable())
                 {
+                    Interlocked.Increment(ref count);
                     if (obj.NTSecurityDescriptor == null)
                     {
                         options.WriteVerbose($"DACL was null on ${obj.SAMAccountName}");
-                        Interlocked.Increment(ref count);
                         continue;
                     }
                     RawSecurityDescriptor desc = new RawSecurityDescriptor(obj.NTSecurityDescriptor, 0);
@@ -296,7 +308,12 @@ namespace SharpHound.EnumerationSteps
                                 BloodHoundDisplayName = $"{mapped.SimpleName}@{CurrentDomain}",
                                 Type = "group",
                                 Domain = CurrentDomain,
+                                DistinguishedName = $"{mapped.SimpleName}@{CurrentDomain}",
                             };
+                        }else if (NullSIDS.TryGetValue(ownersid, out byte val))
+                        {
+                            owner = null;
+                            continue;
                         }
                         else
                         {
@@ -309,8 +326,8 @@ namespace SharpHound.EnumerationSteps
                             catch
                             {
                                 owner = null;
+                                NullSIDS.TryAdd(ownersid, new byte());
                                 options.WriteVerbose($"Unable to resolve {ownersid} for object owner");
-                                Interlocked.Increment(ref count);
                                 continue;
                             }
                         }
@@ -345,7 +362,12 @@ namespace SharpHound.EnumerationSteps
                                     BloodHoundDisplayName = $"{mapped.SimpleName}@{CurrentDomain}",
                                     Type = "group",
                                     Domain = CurrentDomain,
+                                    DistinguishedName = $"{mapped.SimpleName}@{CurrentDomain}"
                                 };
+                            }
+                            else if (NullSIDS.TryGetValue(ownersid, out byte val))
+                            {
+                                continue;
                             }
                             else
                             {
@@ -357,8 +379,8 @@ namespace SharpHound.EnumerationSteps
                                 }
                                 catch
                                 {
+                                    NullSIDS.TryAdd(PrincipalSID, new byte());
                                     options.WriteVerbose($"Unable to resolve {PrincipalSID} for ACL");
-                                    Interlocked.Increment(ref count);
                                     continue;
                                 }
                             }
@@ -369,47 +391,38 @@ namespace SharpHound.EnumerationSteps
                         ActiveDirectoryRights right = (ActiveDirectoryRights)Enum.ToObject(typeof(ActiveDirectoryRights), r.AccessMask);
                         string rs = right.ToString();
                         string guid = r is ObjectAce ? ((ObjectAce)r).ObjectAceType.ToString() : "";
+                        List<string> foundrights = new List<string>();
+                        bool cont = false;                        
 
-                        bool cont = false;
+                        
 
                         //Figure out if we need more processing
+                        cont |= (rs.Contains("WriteDacl") || rs.Contains("WriteOwner"));
+                        if (rs.Contains("GenericWrite") || rs.Contains("GenericAll"))
+                            cont |= ("00000000-0000-0000-0000-000000000000".Equals(guid) || guid.Equals("") || cont);
 
-                        cont |= (rs.Equals("WriteDacl") || rs.Equals("WriteOwner"));
-                        if (rs.Equals("GenericWrite") || rs.Equals("GenericAll"))
-                            cont |= ("00000000-0000-0000-0000-000000000000".Equals(guid) || guid.Equals(""));
-
-                        if (rs.Equals("ExtendedRight"))
+                        if (rs.Contains("ExtendedRight"))
                         {
-                            cont |= (guid.Equals("00000000-0000-0000-0000-000000000000") || guid.Equals("00299570-246d-11d0-a768-00aa006e0529"));
+                            cont |= (guid.Equals("00000000-0000-0000-0000-000000000000") || guid.Equals("") || guid.Equals("00299570-246d-11d0-a768-00aa006e0529") || cont);
 
                             //DCSync
-                            cont |= (guid.Equals("1131f6aa-9c07-11d1-f79f-00c04fc2dcd2") || guid.Equals("1131f6ad-9c07-11d1-f79f-00c04fc2dcd2"));
+                            cont |= (guid.Equals("1131f6aa-9c07-11d1-f79f-00c04fc2dcd2") || guid.Equals("1131f6ad-9c07-11d1-f79f-00c04fc2dcd2") || cont);
                         }
 
-                        if (rs.Equals("WriteProperty"))
-                            cont |= (guid.Equals("00000000-0000-0000-0000-000000000000") || guid.Equals("bf9679c0-0de6-11d0-a285-00aa003049e2") || guid.Equals("bf9679a8-0de6-11d0-a285-00aa003049e2"));
+                        if (rs.Contains("WriteProperty"))
+                            cont |= (guid.Equals("00000000-0000-0000-0000-000000000000") || guid.Equals("bf9679c0-0de6-11d0-a285-00aa003049e2") || guid.Equals("bf9679a8-0de6-11d0-a285-00aa003049e2") || cont);
 
                         if (!cont)
                         {
-                            Interlocked.Increment(ref count);
                             continue;
                         }
 
                         string acetype = null;
                         MatchCollection coll = GenericRegex.Matches(rs);
-                        if (coll.Count == 0)
+                        if (rs.Contains("ExtendedRight"))
                         {
                             switch (guid)
                             {
-                                case "00299570-246d-11d0-a768-00aa006e0529":
-                                    acetype = "User-Force-Change-Password";
-                                    break;
-                                case "bf9679c0-0de6-11d0-a285-00aa003049e2":
-                                    acetype = "Member";
-                                    break;
-                                case "bf9679a8-0de6-11d0-a285-00aa003049e2":
-                                    acetype = "Script-Path";
-                                    break;
                                 case "1131f6aa-9c07-11d1-f79f-00c04fc2dcd2":
                                     acetype = "DS-Replication-Get-Changes";
                                     break;
@@ -445,24 +458,133 @@ namespace SharpHound.EnumerationSteps
 
                             syncers.AddOrUpdate(principal.DistinguishedName, SyncObject, (key, oldVar) => SyncObject);
                             //We only care about these privs if we have both, so store that stuff and continue on
-                            Interlocked.Increment(ref count);
                             continue;
                         }
 
-                        output.Add(new ACLInfo
+                        if (rs.Contains("GenericAll"))
                         {
-                            ObjectName = obj.BloodHoundDisplayName,
-                            ObjectType = obj.Type,
-                            AceType = acetype,
-                            Inherited = r.IsInherited,
-                            PrincipalName = principal.BloodHoundDisplayName,
-                            PrincipalType = principal.Type,
-                            Qualifier = r.AceQualifier.ToString(),
-                            RightName = rs
-                        });
-                    }
+                            output.Add(new ACLInfo
+                            {
+                                ObjectName = obj.BloodHoundDisplayName,
+                                ObjectType = obj.Type,
+                                AceType = "",
+                                Inherited = r.IsInherited,
+                                PrincipalName = principal.BloodHoundDisplayName,
+                                PrincipalType = principal.Type,
+                                Qualifier = r.AceQualifier.ToString(),
+                                RightName = "GenericAll"
+                            });
+                        }
 
-                    Interlocked.Increment(ref count);
+                        if (rs.Contains("GenericWrite"))
+                        {
+                            output.Add(new ACLInfo
+                            {
+                                ObjectName = obj.BloodHoundDisplayName,
+                                ObjectType = obj.Type,
+                                AceType = "",
+                                Inherited = r.IsInherited,
+                                PrincipalName = principal.BloodHoundDisplayName,
+                                PrincipalType = principal.Type,
+                                Qualifier = r.AceQualifier.ToString(),
+                                RightName = "GenericWrite"
+                            });
+                        }
+
+                        if (rs.Contains("WriteOwner"))
+                        {
+                            output.Add(new ACLInfo
+                            {
+                                ObjectName = obj.BloodHoundDisplayName,
+                                ObjectType = obj.Type,
+                                AceType = "",
+                                Inherited = r.IsInherited,
+                                PrincipalName = principal.BloodHoundDisplayName,
+                                PrincipalType = principal.Type,
+                                Qualifier = r.AceQualifier.ToString(),
+                                RightName = "WriteOwner"
+                            });
+                        }
+
+                        if (rs.Contains("WriteDacl"))
+                        {
+                            output.Add(new ACLInfo
+                            {
+                                ObjectName = obj.BloodHoundDisplayName,
+                                ObjectType = obj.Type,
+                                AceType = "",
+                                Inherited = r.IsInherited,
+                                PrincipalName = principal.BloodHoundDisplayName,
+                                PrincipalType = principal.Type,
+                                Qualifier = r.AceQualifier.ToString(),
+                                RightName = "WriteDacl"
+                            });
+                        }
+
+                        if (rs.Contains("WriteProperty"))
+                        {
+                            if (guid.Equals("bf9679c0-0de6-11d0-a285-00aa003049e2"))
+                            {
+                                output.Add(new ACLInfo
+                                {
+                                    ObjectName = obj.BloodHoundDisplayName,
+                                    ObjectType = obj.Type,
+                                    AceType = "Member",
+                                    Inherited = r.IsInherited,
+                                    PrincipalName = principal.BloodHoundDisplayName,
+                                    PrincipalType = principal.Type,
+                                    Qualifier = r.AceQualifier.ToString(),
+                                    RightName = "WriteProperty"
+                                });
+                            }
+                            else
+                            {
+                                output.Add(new ACLInfo
+                                {
+                                    ObjectName = obj.BloodHoundDisplayName,
+                                    ObjectType = obj.Type,
+                                    AceType = "Script-Path",
+                                    Inherited = r.IsInherited,
+                                    PrincipalName = principal.BloodHoundDisplayName,
+                                    PrincipalType = principal.Type,
+                                    Qualifier = r.AceQualifier.ToString(),
+                                    RightName = "WriteProperty"
+                                });
+                            }
+                        }
+
+                        if (rs.Contains("ExtendedRight"))
+                        {
+                            if (guid.Equals("00299570-246d-11d0-a768-00aa006e0529"))
+                            {
+                                output.Add(new ACLInfo
+                                {
+                                    ObjectName = obj.BloodHoundDisplayName,
+                                    ObjectType = obj.Type,
+                                    AceType = "User-Force-Change-Password",
+                                    Inherited = r.IsInherited,
+                                    PrincipalName = principal.BloodHoundDisplayName,
+                                    PrincipalType = principal.Type,
+                                    Qualifier = r.AceQualifier.ToString(),
+                                    RightName = "ExtendedRight"
+                                });
+                            }
+                            else
+                            {
+                                output.Add(new ACLInfo
+                                {
+                                    ObjectName = obj.BloodHoundDisplayName,
+                                    ObjectType = obj.Type,
+                                    AceType = "All",
+                                    Inherited = r.IsInherited,
+                                    PrincipalName = principal.BloodHoundDisplayName,
+                                    PrincipalType = principal.Type,
+                                    Qualifier = r.AceQualifier.ToString(),
+                                    RightName = "ExtendedRight"
+                                });
+                            }
+                        }                        
+                    }
                 }
             });
         }

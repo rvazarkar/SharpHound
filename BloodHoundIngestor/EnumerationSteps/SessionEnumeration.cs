@@ -17,6 +17,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
+using static SharpHound.Options;
 
 namespace SharpHound
 {
@@ -57,6 +58,7 @@ namespace SharpHound
             {
                 CurrentDomain = DomainName;
                 count = 0;
+                dead = 0;
                 BlockingCollection<Computer> input = new BlockingCollection<Computer>();
                 BlockingCollection<SessionInfo> output = new BlockingCollection<SessionInfo>();
 
@@ -264,6 +266,12 @@ namespace SharpHound
             Console.WriteLine($"Session Enumeration done in {overwatch.Elapsed}\n");
             watch.Stop();
             overwatch.Stop();
+            if (options.CollMethod.Equals(CollectionMethod.SessionLoop))
+            {
+                Console.WriteLine($"Starting next session run in {options.LoopTime} minutes");
+                new ManualResetEvent(false).WaitOne(options.LoopTime * 60 * 1000);
+                StartEnumeration();
+            }
         }
 
         Task StartWriter(BlockingCollection<SessionInfo> output, TaskFactory factory)
@@ -280,11 +288,17 @@ namespace SharpHound
                         {
                             writer.WriteLine("UserName,ComputerName,Weight");
                         }
-                        writer.AutoFlush = true;
+                        int localcount = 0;
                         foreach (SessionInfo info in output.GetConsumingEnumerable())
                         {
                             writer.WriteLine(info.ToCSV());
+                            localcount++;
+                            if (localcount % 100 == 0)
+                            {
+                                writer.Flush();
+                            }
                         }
+                        writer.Flush();
                     }
                 }
                 else
@@ -556,6 +570,11 @@ namespace SharpHound
                     cname = server;
                 }
 
+                if (cname.Equals("127.0.0.1"))
+                {
+                    cname = server;
+                }
+
                 if (username.EndsWith("$", StringComparison.CurrentCulture))
                 {
                     continue;
@@ -568,8 +587,15 @@ namespace SharpHound
 
                 if (!ResolveCache.TryGetValue(cname, out string DNSHostName))
                 {
-                    DNSHostName = Dns.GetHostEntry(cname).HostName;
-                    ResolveCache.TryAdd(cname, DNSHostName);
+                    try
+                    {
+                        DNSHostName = Dns.GetHostEntry(cname).HostName;
+                        ResolveCache.TryAdd(cname, DNSHostName);
+                    }
+                    catch
+                    {
+                        DNSHostName = cname;
+                    }                    
                 }
 
                 GlobalCatalogMap obj;

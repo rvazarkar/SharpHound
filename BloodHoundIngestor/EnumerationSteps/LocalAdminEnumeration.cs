@@ -170,11 +170,17 @@ namespace SharpHound.EnumerationSteps
                         {
                             writer.WriteLine("ComputerName,AccountName,AccountType");
                         }
-                        writer.AutoFlush = true;
+                        int localcount = 0;
                         foreach (LocalAdminInfo info in output.GetConsumingEnumerable())
                         {
                             writer.WriteLine(info.ToCSV());
+                            localcount++;
+                            if (localcount % 100 == 0)
+                            {
+                                writer.Flush();
+                            }
                         }
+                        writer.Flush();
                     }
                 }
                 else

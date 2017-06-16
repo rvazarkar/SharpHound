@@ -1,6 +1,7 @@
 ﻿using CommandLine;
 using SharpHound.EnumerationSteps;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.DirectoryServices.ActiveDirectory;
 using System.IO;
@@ -23,8 +24,11 @@ namespace SharpHound
             Trusts,
             ACL,
             Cache,
+            SessionLoop,
             Default
         }
+
+        private Dictionary<string, string> FilePaths = new Dictionary<string, string>();
 
         [Option('c', "CollectionMethod", DefaultValue = CollectionMethod.Default, HelpText = "Collection Method (Group, LocalGroup, GPOLocalGroup, Session, LoggedOn, ComputerOnly, Trusts, Stealth, Default")]
         public CollectionMethod CollMethod { get; set; }
@@ -83,6 +87,9 @@ namespace SharpHound
         [Option("NoDB", DefaultValue = false, MutuallyExclusiveSet = "dbopt")]
         public bool NoDB { get; set; }
 
+        [Option("LoopTime", DefaultValue =5, HelpText ="Time in minutes between each session loop")]
+        public int LoopTime { get; set; }
+
         [ParserState]
         public IParserState LastParserState { get; set; }
 
@@ -99,6 +106,7 @@ Enumeration Options:
         Group - Enumerate Group Membership
         LocalGroup - Enumerate Local Admin
         Session - Enumerate Sessions
+        SessionLoop - Continuously Enumerate Sessions
         LoggedOn - Enumerate Sessions using Elevation
         ComputerOnly - Enumerate Sessions and Local Admin
         Trusts - Enumerate Domain Trusts
@@ -129,6 +137,10 @@ Performance Tuning:
         Skip pinging computers (will most likely be slower)
         Use this option if ping is disabled on the network
 
+    --LoopTime
+        Amount of time to wait in between session enumeration loops
+        Use in conjunction with -c SessionLoop
+
 Output Options
     -f , --CSVFolder (Default: .)
         The folder in which to store CSV files
@@ -157,6 +169,10 @@ Database Options
 
     --ForceRebuild
         Force a rebuild of the BloodHound databse
+
+    --NoDB
+        Enumerate without using a DB at all.
+        Only recommended for extremely large networks
 
 General Options
     -i , --Interval (Default: 30000)
@@ -195,6 +211,10 @@ General Options
         public string GetFilePath(string filename)
         {
             string f;
+            if (FilePaths.TryGetValue(filename, out string filepath))
+            {
+                return filepath;
+            }
             if (CSVPrefix.Equals(""))
             {
                 f = filename;
@@ -205,8 +225,11 @@ General Options
 
             f = $"{f}_{DateTime.Now.ToString("yyyyMMddHHmmss")}.csv";
             
+            filepath = Path.Combine(CSVFolder, f);
 
-            return Path.Combine(CSVFolder, f);
+            FilePaths.Add(filename, filepath);
+
+            return filepath;
         }
     }
     class Program
@@ -305,6 +328,10 @@ General Options
                         ACLEnum = new ACLEnumeration();
                         ACLEnum.StartEnumeration();
                         break;
+                    case CollectionMethod.SessionLoop:
+                        SessionEnum = new SessionEnumeration();
+                        SessionEnum.StartEnumeration();
+                        break;
                 }
 
                 if (options.RemoveDB)
@@ -317,8 +344,7 @@ General Options
                 Console.WriteLine();
                 Console.WriteLine($"SharpHound finished all enumeration in {overwatch.Elapsed}");
                 overwatch.Stop();
-            }
-            
+            }            
         }
 
         public static void InvokeBloodHound(string[] args)

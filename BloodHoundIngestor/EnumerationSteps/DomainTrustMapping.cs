@@ -153,7 +153,6 @@ namespace SharpHound.EnumerationSteps
                 }
             }
 
-            Console.WriteLine("got here");
             output.CompleteAdding();
             writer.Wait();
 

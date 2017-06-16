@@ -10,9 +10,16 @@ namespace SharpHound
     {
         LiteDatabase db;
         static DBManager instance;
+        static bool nodb;
 
         public static void CreateInstance(string file = null)
         {
+            if (Helpers.Instance.Options.NoDB)
+            {
+                nodb = true;
+                instance = new DBManager(true);
+                return;
+            }
             if (file == null)
             {
                 Helpers.Instance.Options.WriteVerbose("Creating In-Memory Database");
@@ -54,12 +61,20 @@ namespace SharpHound
             CreateIndexes();
         }
 
-        public void Dispose()
+        DBManager(bool dummy)
         {
-            db.Dispose();
+
         }
 
-        private void CreateIndexes()
+        public void Dispose()
+        {
+            if (!nodb)
+            {
+                db.Dispose();
+            }
+        }
+
+        void CreateIndexes()
         {
             var users = db.GetCollection<User>("users");
             var groups = db.GetCollection<Group>("groups");
@@ -109,6 +124,10 @@ namespace SharpHound
 
         public bool ContainsSid(string sid)
         {
+            if (nodb)
+            {
+                return false;
+            }
             var users = db.GetCollection<User>("users");
             var groups = db.GetCollection<Group>("groups");
             var computers = db.GetCollection<Computer>("computers");
@@ -130,6 +149,12 @@ namespace SharpHound
 
         public bool FindBySID(string sid, string Domain, out DBObject obj)
         {
+            if (nodb)
+            {
+                obj = null;
+                return false;
+            }
+
             Domain = Domain.ToLower();
             var users = db.GetCollection<User>("users");
             var groups = db.GetCollection<Group>("groups");
@@ -198,6 +223,11 @@ namespace SharpHound
 
         public bool FindUserBySID(string sid, out DBObject obj, string Domain)
         {
+            if (nodb)
+            {
+                obj = null;
+                return false;
+            }
             var users = db.GetCollection<User>("users");
 
             var found = users.Find(x => x.SID.Equals(sid));
@@ -219,6 +249,11 @@ namespace SharpHound
 
         public bool FindGroupBySID(string sid, out DBObject obj, string Domain)
         {
+            if (nodb)
+            {
+                obj = null;
+                return false;
+            }
             var groups = db.GetCollection<Group>("groups");
 
             var found = groups.Find(x => x.SID.Equals(sid));
@@ -240,6 +275,11 @@ namespace SharpHound
 
         public bool FindComputerBySID(string sid, out DBObject obj, string Domain)
         {
+            if (nodb)
+            {
+                obj = null;
+                return false;
+            }
             var computers = db.GetCollection<Computer>("computers");
 
             var found = computers.Find(x => x.SID.Equals(sid));
@@ -261,6 +301,10 @@ namespace SharpHound
 
         public bool IsDomainCompleted(string Domain)
         {
+            if (nodb)
+            {
+                return false;
+            }
             var domains = db.GetCollection<DomainDB>("domains");
             DomainDB d = domains.FindOne(x => x.DomainDNSName.Equals(Domain, StringComparison.InvariantCultureIgnoreCase));
             if (d == null || !d.Completed)
@@ -272,6 +316,11 @@ namespace SharpHound
 
         public bool GetGCMap(string username, out GlobalCatalogMap obj)
         {
+            if (nodb)
+            {
+                obj = null;
+                return false;
+            }
             var gc = db.GetCollection<GlobalCatalogMap>("globalcatalog");
             obj = gc.FindOne(x => x.Username.Equals(username));
             return obj != null;
@@ -279,6 +328,11 @@ namespace SharpHound
 
         public bool GetDomain(string search, out DomainDB obj)
         {
+            if (nodb)
+            {
+                obj = null;
+                return false;
+            }
             var domains = db.GetCollection<DomainDB>("domains");
             obj = domains.FindOne(x => x.DomainDNSName.Equals(search) || x.DomainShortName.Equals(search) || x.DomainSid.Equals(search));
 
@@ -287,19 +341,30 @@ namespace SharpHound
 
         public void InsertGCObject(GlobalCatalogMap obj)
         {
+            if (nodb)
+            {
+                return;
+            }
             var gc = db.GetCollection<GlobalCatalogMap>("globalcatalog");
             gc.Upsert(obj);
         }
 
         public void InsertDomain(DomainDB domain)
         {
+            if (nodb)
+            {
+                return;
+            }
             var domains = db.GetCollection<DomainDB>("domains");
-
             domains.Upsert(domain);
         }
 
         public void InsertRecord(DBObject record)
         {
+            if (nodb)
+            {
+                return;
+            }
             var users = db.GetCollection<User>("users");
             var groups = db.GetCollection<Group>("groups");
             var computers = db.GetCollection<Computer>("computers");
@@ -326,12 +391,17 @@ namespace SharpHound
             
         }
 
-        public bool FindDistinguishedName(string dn, out DBObject matched)
+        public bool FindDistinguishedName(string dn, out DBObject obj)
         {
-            matched = db.GetCollection<Group>("groups")
+            if (nodb)
+            {
+                obj = null;
+                return false;
+            }
+            obj = db.GetCollection<Group>("groups")
                 .FindOne(x => x.DistinguishedName.Equals(dn, StringComparison.InvariantCultureIgnoreCase));
             
-            if (matched == null)
+            if (obj == null)
             {
                 return false;
             }
@@ -343,26 +413,46 @@ namespace SharpHound
 
         public LiteCollection<User> GetUsers()
         {
+            if (nodb)
+            {
+                return null;
+            }
             return db.GetCollection<User>("users");
         }
 
         public LiteCollection<Computer> GetComputers()
         {
+            if (nodb)
+            {
+                return null;
+            }
             return db.GetCollection<Computer>("computers");
         }
 
         public LiteCollection<Group> GetGroups()
         {
+            if (nodb)
+            {
+                return null;
+            }
             return db.GetCollection<Group>("groups");
         }
         
         public LiteCollection<DomainDB> GetDomains()
         {
+            if (nodb)
+            {
+                return null;
+            }
             return db.GetCollection<DomainDB>("domains");
         }
 
         public LiteCollection<DomainACL> GetDomainACLS()
         {
+            if (nodb)
+            {
+                return null;
+            }
             return db.GetCollection<DomainACL>("domainacl");
         }
     }

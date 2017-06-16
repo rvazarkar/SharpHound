@@ -5,6 +5,7 @@ using System.DirectoryServices;
 using System.DirectoryServices.ActiveDirectory;
 using System.Net.NetworkInformation;
 using System.Security.Principal;
+using static SharpHound.Options;
 
 namespace SharpHound
 {
@@ -24,11 +25,8 @@ namespace SharpHound
         public static void CreateInstance(Options cli)
         {
             instance = new Helpers(cli);
-            if (!options.NoDB)
-            {
-                string file = options.InMemory ? null : options.DBName;
-                DBManager.CreateInstance(file);
-            }
+            string file = options.InMemory ? null : options.DBName;
+            DBManager.CreateInstance(file);
         }
 
         public static Helpers Instance
@@ -447,10 +445,15 @@ namespace SharpHound
                 return true;
             }
 
-            if (PingCache.TryGetValue(server, out bool val))
+            bool val;
+            if (!options.CollMethod.Equals(CollectionMethod.SessionLoop))
             {
-                return val;
+                if (PingCache.TryGetValue(server, out val))
+                {
+                    return val;
+                }
             }
+            
             Ping ping = new Ping();
             try
             {
@@ -470,8 +473,11 @@ namespace SharpHound
                 val = false;
             }
 
-
-            PingCache.TryAdd(server, val);
+            if (!options.CollMethod.Equals(CollectionMethod.SessionLoop))
+            {
+                PingCache.TryAdd(server, val);
+            }
+            
             return val;
         }
     }

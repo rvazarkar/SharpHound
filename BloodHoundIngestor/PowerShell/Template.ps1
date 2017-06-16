@@ -64,7 +64,11 @@ function Invoke-BloodHound{
 		$Interval,
 
 		[Switch]
-		$Verbose
+		$Verbose,
+
+		[ValidateRange(1,50000000)]
+		[int]
+		$LoopTime
     )
 
 	$vars = New-Object System.Collections.Generic.List[System.Object]
@@ -151,6 +155,11 @@ function Invoke-BloodHound{
 
 	if ($NoDB){
 		$vars.Add("--NoDB");
+	}
+
+	if ($LoopTime){
+		$vars.Add("--LoopTime");
+		$vars.Add($LoopTime);
 	}
 
 	$passed = [string[]]$vars.ToArray()

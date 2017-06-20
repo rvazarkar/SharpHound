@@ -33,6 +33,7 @@ namespace SharpHound
         static string CurrentDomain;
         static string CurrentUser;
         static string GCPath;
+        static DateTime LoopEndTime;
 
         static ConcurrentDictionary<string, DBObject> sidmap;
         static ConcurrentDictionary<string, string> ResolveCache;
@@ -46,6 +47,11 @@ namespace SharpHound
             CurrentUser = WindowsIdentity.GetCurrent().Name.Split('\\')[1];
             ResolveCache = new ConcurrentDictionary<string, string>();
             GCPath = $"GC://{new DirectoryEntry("LDAP://RootDSE").Properties["dnshostname"].Value.ToString()}";
+            if (options.CollMethod.Equals(CollectionMethod.SessionLoop) && options.MaxLoopTime != 0)
+            {
+                DateTime t = DateTime.Now;
+                LoopEndTime = t.AddMinutes(options.MaxLoopTime);
+            }
         }
 
         public void StartEnumeration()
@@ -191,24 +197,35 @@ namespace SharpHound
                             string script = result.ScriptPath;
                             string prof = result.ProfilePath;
 
-                            if (home != null)
+                            if (home != null && home.StartsWith("\\", StringComparison.Ordinal))
                             {
                                 paths.Add(home.ToLower().Split('\\')[2]);
                             }
 
-                            if (script != null)
+                            if (script != null && script.StartsWith("\\", StringComparison.Ordinal))
                             {
                                 paths.Add(script.ToLower().Split('\\')[2]);
                             }
 
-                            if (prof != null)
+                            if (prof != null && prof.StartsWith("\\", StringComparison.Ordinal))
                             {
                                 paths.Add(prof.ToLower().Split('\\')[2]);
                             }
                         });
 
-                        foreach (string key in paths)
+                        Console.WriteLine("Found list of paths to check");
+
+                        DirectorySearcher searcher = helpers.GetDomainSearcher(DomainName);
+                        searcher.Filter = "(userAccountControl:1.2.840.113556.1.4.803:=8192)";
+                        searcher.PropertiesToLoad.Add("dnshostname");
+                        foreach (SearchResult r in searcher.FindAll())
                         {
+                            paths.Add(r.GetProp("dnshostname"));
+                        }
+
+                        foreach (string key in paths.Distinct())
+                        {
+                            options.WriteVerbose($"Checking sessions on {key}");
                             if (!ResolveCache.TryGetValue(key, out string hostname))
                             {
                                 try
@@ -225,7 +242,7 @@ namespace SharpHound
                             {
                                 continue;
                             }
-                            input.Add(manager.GetComputers().FindOne(x => x.DNSHostName.ToUpper().Equals(hostname)));
+                            input.Add(new Computer{ DNSHostName = key});
                         }
                         input.CompleteAdding();
                         Task.WaitAll(taskhandles.ToArray());
@@ -268,8 +285,24 @@ namespace SharpHound
             overwatch.Stop();
             if (options.CollMethod.Equals(CollectionMethod.SessionLoop))
             {
+                if (options.MaxLoopTime != 0)
+                {
+                    if (DateTime.Now > LoopEndTime)
+                    {
+                        Console.WriteLine("Exiting session loop as MaxLoopTime has passed");
+                        return;
+                    }
+                }
                 Console.WriteLine($"Starting next session run in {options.LoopTime} minutes");
                 new ManualResetEvent(false).WaitOne(options.LoopTime * 60 * 1000);
+                if (options.MaxLoopTime != 0)
+                {
+                    if (DateTime.Now > LoopEndTime)
+                    {
+                        Console.WriteLine("Exiting session loop as MaxLoopTime has passed");
+                        return;
+                    }
+                }
                 StartEnumeration();
             }
         }

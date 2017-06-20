@@ -90,6 +90,9 @@ namespace SharpHound
         [Option("LoopTime", DefaultValue =5, HelpText ="Time in minutes between each session loop")]
         public int LoopTime { get; set; }
 
+        [Option("MaxLoopTime", DefaultValue =0, HelpText ="Total time to continue looping in minutes")]
+        public int MaxLoopTime { get; set; }
+
         [ParserState]
         public IParserState LastParserState { get; set; }
 
@@ -141,6 +144,11 @@ Performance Tuning:
         Amount of time to wait in between session enumeration loops
         Use in conjunction with -c SessionLoop
 
+    --MaxLoopTime
+        Overall time to spend looping in minutes. Will stop looping after this time passes
+        Use in conjunction with -c SessionLoop
+        Default will loop infinitely
+
 Output Options
     -f , --CSVFolder (Default: .)
         The folder in which to store CSV files
@@ -168,7 +176,7 @@ Database Options
         Automatically delete the database after running
 
     --ForceRebuild
-        Force a rebuild of the BloodHound databse
+        Force a rebuild of the BloodHound database
 
     --NoDB
         Enumerate without using a DB at all.

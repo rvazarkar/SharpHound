@@ -68,7 +68,11 @@ function Invoke-BloodHound{
 
 		[ValidateRange(1,50000000)]
 		[int]
-		$LoopTime
+		$LoopTime,
+
+		[ValidateRange(1,50000000)]
+		[int]
+		$MaxLoopTime
     )
 
 	$vars = New-Object System.Collections.Generic.List[System.Object]
@@ -160,6 +164,11 @@ function Invoke-BloodHound{
 	if ($LoopTime){
 		$vars.Add("--LoopTime");
 		$vars.Add($LoopTime);
+	}
+
+	if ($MaxLoopTime){
+		$vars.Add("--MaxLoopTime");
+		$vars.Add($MaxLoopTime);
 	}
 
 	$passed = [string[]]$vars.ToArray()

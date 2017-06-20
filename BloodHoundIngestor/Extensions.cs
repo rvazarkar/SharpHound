@@ -114,7 +114,10 @@ namespace ExtensionMethods
                     SAMAccountName = san,
                     ServicePrincipalName = result.GetPropArray("serviceprincipalname"),
                     SID = sidstring,
-                    Type = "user"
+                    Type = "user",
+                    HomeDirectory = result.GetProp("homedirectory"),
+                    ProfilePath = result.GetProp("profilepath"),
+                    ScriptPath = result.GetProp("scriptpath")
                 };
             }
             else if (computers.Contains(accounttype))

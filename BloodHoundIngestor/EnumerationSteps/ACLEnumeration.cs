@@ -100,18 +100,15 @@ namespace SharpHound.EnumerationSteps
                 }
                 else
                 {
-                    Console.WriteLine("Querying DB");
                     var users = manager.GetUsers().Find(x => x.Domain.Equals(DomainName, StringComparison.InvariantCultureIgnoreCase));
                     var computers = manager.GetComputers().Find(x => x.Domain.Equals(DomainName, StringComparison.InvariantCultureIgnoreCase));
                     var groups = manager.GetGroups().Find(x => x.Domain.Equals(DomainName, StringComparison.InvariantCultureIgnoreCase));
                     var domains = manager.GetDomainACLS().Find(x => x.Domain.Equals(DomainName, StringComparison.InvariantCultureIgnoreCase));
-                    Console.WriteLine("Finished Querying DB");
                     count = 0;
                     total = users.Count() + computers.Count() + groups.Count() + domains.Count();
 
 
                     PrintStatus();
-                    Console.WriteLine("Adding Objects");
                     foreach (DBObject obj in users)
                     {
                         input.Add(obj);
@@ -131,7 +128,6 @@ namespace SharpHound.EnumerationSteps
                     {
                         input.Add(obj);
                     }
-                    Console.WriteLine("Finished Adding");
                 }                
 
                 input.CompleteAdding();
@@ -301,7 +297,6 @@ namespace SharpHound.EnumerationSteps
                     }
                     RawSecurityDescriptor desc = new RawSecurityDescriptor(obj.NTSecurityDescriptor, 0);
                     RawAcl acls = desc.DiscretionaryAcl;
-                    Console.WriteLine("Finding Owner");
                     //Figure out whose the owner
                     string ownersid = desc.Owner.ToString();
                     
@@ -354,7 +349,6 @@ namespace SharpHound.EnumerationSteps
                         });
                     }
 
-                    Console.WriteLine("Looping ACEs");
                     foreach (QualifiedAce r in acls)
                     {
                         string PrincipalSID = r.SecurityIdentifier.ToString();

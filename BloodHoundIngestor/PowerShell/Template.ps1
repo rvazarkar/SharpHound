@@ -13,6 +13,7 @@ function Invoke-BloodHound{
 		calls are made in order to ensure that assembly dependencies are loaded properly.
 
 	.PARAMETER Verbose
+
 		Enable verbose output mode. Will print a lot!
 
     .PARAMETER CollectionMethod
@@ -36,14 +37,16 @@ function Invoke-BloodHound{
 		domain your user context specifies.
 
 	.PARAMETER SearchForest
-	
+
 		Expands data collection to include all domains in the forest. 
 
 	.PARAMETER Stealth
+
 		Use stealth collection options, will sacrifice data quality in favor of much reduced
 		network impact
 
 	.PARAMETER SkipGCDeconfliction
+
 		Skip's Global Catalog deconfliction during session enumeration. This option
 		can result in more inaccuracy in data.
 
@@ -52,54 +55,68 @@ function Invoke-BloodHound{
 		Specifies the number of threads to use during enumeration (Default 20)
 
 	.PARAMETER PingTimeout
+
 		Specifies timeout for ping requests to computers in milliseconds (Default 750)
 
 	.PARAMETER SkipPing
+
 		Skip all ping checks for computers. This option will most likely be slower as
 		API calls will be made to all computers regardless of being up
 		Use this option if ping is disabled on the network for some reason
 
 	.PARAMETER LoopTime
+
 		Amount of time to wait between session enumeration loops in minutes. This option
 		should be used in conjunction with the SessionLoop enumeration method. 
 		(Default 5 minutes)
 
 	.PARAMETER MaxLoopTime
+
 		Max amount of time to spend looping in minutes. Session looping will stop when this 
 		time is exceeded. By default, looping will continue indefinitely
 
 	.PARAMETER CSVFolder
+
 		Folder to export CSVs too (Defaults to current directory)
 
 	.PARAMETER CSVPrefix
+
 		Prefix to add to your CSV Files (Default "")
 
 	.PARAMETER URI
+
 		The URI for the Neo4j REST API. Setting this option will turn off CSV output
 		Format for this options is SERVER:PORT
 
 	.PARAMETER UserPass
+
 		Credentials for the Neo4j REST API. 
 		Format for this option is username:password
 
 	.PARAMETER DB
+
 		Filename for the NoSQL Database used by bloodhound. (Default BloodHound.db)
 
 	.PARAMETER InMemory
+
 		Store database in memory instead of on disk. 
 		This option can be very RAM intensive, use with caution!
 
 	.PARAMETER RemoveDB
+
 		Automatically delete the database on disk after running
 
 	.PARAMETER ForceRebuild
+
 		Force a rebuild of the BloodHound database
 
 	.PARAMETER NoDB
+
 		Enumerate without using the NoSQL DB.
 		Only recommended for extremely large networks
 
 	.PARAMETER Interval
+
 		Interval to display progress during enumeration in milliseconds (Default 30000)
 		
     .EXAMPLE

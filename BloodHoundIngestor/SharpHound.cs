@@ -130,7 +130,7 @@ Enumeration Options:
     
 
 Performance Tuning:
-    -t , --Threads (Default: 30)
+    -t , --Threads (Default: 20)
         The number of threads to use for Enumeration
     
     --PingTimeout (Default: 750)
